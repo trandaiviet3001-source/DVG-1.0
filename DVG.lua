@@ -1,10 +1,9 @@
 -- =============================================
--- 🌊 DVG - Sóng Thần Brainrot (Siêu Nhẹ - 2026)
--- Chill biển - Full tiếng Việt - Nhẹ máy - Farm nhanh
--- Custom riêng cho bạn - Chạy tốt Xeno & Delta
+-- 🌊 DVG - Sóng Thần Brainrot (Siêu Nhẹ + Fix Toggle 2026)
+-- Chill biển - Full tiếng Việt - Nhẹ máy - Farm thật sự chạy
 -- =============================================
 
-print("🌊 Đang load DVG Siêu Nhẹ...")
+print("🌊 Đang load DVG Siêu Nhẹ - Fix Toggle...")
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -22,7 +21,7 @@ player.CharacterAdded:Connect(function(new)
     root = new:WaitForChild("HumanoidRootPart")
 end)
 
--- ================== BIẾN ==================
+-- ================== BIẾN CHỨC NĂNG (BẬT THẬT) ==================
 local AutoFarm = false
 local AutoCollect = false
 local AutoInfinity = false
@@ -32,7 +31,7 @@ local Fly = false
 local NoClip = false
 local Speed = 120
 
--- ================== ANTI-BAN NHẸ ==================
+-- ================== ANTI-BAN ==================
 spawn(function()
     while wait(30) do
         pcall(function()
@@ -43,7 +42,7 @@ spawn(function()
     end
 end)
 
--- ================== GUI SIÊU NHẸ ==================
+-- ================== GUI NHẸ (Toggle thật sự bật chức năng) ==================
 local sg = Instance.new("ScreenGui")
 sg.Name = "DVG_Light"
 sg.ResetOnSpawn = false
@@ -52,7 +51,7 @@ sg.Parent = player:WaitForChild("PlayerGui")
 local frame = Instance.new("Frame")
 frame.Size = UDim2.new(0, 380, 0, 420)
 frame.Position = UDim2.new(0.5, -190, 0.5, -210)
-frame.BackgroundColor3 = Color3.fromRGB(0, 90, 130)  -- màu biển chill
+frame.BackgroundColor3 = Color3.fromRGB(0, 90, 130)
 frame.BorderSizePixel = 2
 frame.BorderColor3 = Color3.fromRGB(0, 200, 255)
 frame.Parent = sg
@@ -67,7 +66,7 @@ title.Font = Enum.Font.GothamBold
 title.Parent = frame
 
 local y = 60
-local function AddToggle(txt, callback)
+local function AddToggle(txt, varName)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0.9, 0, 0, 35)
     btn.Position = UDim2.new(0.05, 0, 0, y)
@@ -79,8 +78,9 @@ local function AddToggle(txt, callback)
     btn.Parent = frame
 
     btn.MouseButton1Click:Connect(function()
-        callback()
-        if btn.Text:find("OFF") then
+        _G[varName] = not _G[varName]   -- Dùng _G để toggle thật
+
+        if _G[varName] then
             btn.Text = "🌊 " .. txt .. " : ON"
             btn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
         else
@@ -91,13 +91,14 @@ local function AddToggle(txt, callback)
     y = y + 45
 end
 
-AddToggle("Auto Farm Brainrot", function() AutoFarm = not AutoFarm end)
-AddToggle("Auto Collect Tiền", function() AutoCollect = not AutoCollect end)
-AddToggle("Tự Kiếm Infinity", function() AutoInfinity = not AutoInfinity end)
-AddToggle("Xóa Sóng Thần", function() DestroyWave = not DestroyWave end)
-AddToggle("God Mode", function() GodMode = not GodMode end)
-AddToggle("Fly", function() Fly = not Fly end)
-AddToggle("NoClip", function() NoClip = not NoClip end)
+-- Tạo toggle (bây giờ sẽ thật sự bật chức năng)
+AddToggle("Auto Farm Brainrot", "AutoFarm")
+AddToggle("Auto Collect Tiền", "AutoCollect")
+AddToggle("Tự Kiếm Infinity", "AutoInfinity")
+AddToggle("Xóa Sóng Thần", "DestroyWave")
+AddToggle("God Mode", "GodMode")
+AddToggle("Fly", "Fly")
+AddToggle("NoClip", "NoClip")
 
 -- Speed
 local speedLabel = Instance.new("TextLabel")
@@ -121,22 +122,22 @@ speedBox.FocusLost:Connect(function()
     speedLabel.Text = "Tốc Độ: " .. Speed
 end)
 
-print("✅ 🌊 DVG Siêu Nhẹ đã load! Menu nhẹ, farm nhanh, ít lag.")
+print("✅ 🌊 DVG đã fix toggle - Bây giờ bấm là farm thật!")
 
--- ================== MAIN LOOP (TỐI ƯU NHẸ) ==================
+-- ================== MAIN LOOP ==================
 RunService.Heartbeat:Connect(function()
     pcall(function()
-        if GodMode then
+        if _G.GodMode then
             humanoid.MaxHealth = math.huge
             humanoid.Health = math.huge
         end
         humanoid.WalkSpeed = Speed
 
-        if Fly and root then
+        if _G.Fly and root then
             root.Velocity = Vector3.new(root.Velocity.X, 40, root.Velocity.Z)
         end
 
-        if NoClip then
+        if _G.NoClip then
             for _, part in pairs(character:GetDescendants()) do
                 if part:IsA("BasePart") then part.CanCollide = false end
             end
@@ -144,19 +145,19 @@ RunService.Heartbeat:Connect(function()
     end)
 end)
 
--- Farm siêu nhanh nhưng nhẹ máy (wait 0.2)
+-- Farm loop (siêu nhanh nhưng nhẹ)
 spawn(function()
-    while wait(0.2) do
+    while wait(0.18) do
         pcall(function()
-            if not (AutoFarm or AutoCollect or AutoInfinity) then return end
+            if not (_G.AutoFarm or _G.AutoCollect or _G.AutoInfinity) then return end
             for _, item in pairs(Workspace:GetDescendants()) do
                 if item:IsA("BasePart") and item:FindFirstChild("TouchInterest") then
                     local n = item.Name:lower()
-                    if (AutoFarm and (n:find("brainrot") or n:find("pet"))) or
-                       (AutoCollect and (n:find("cash") or n:find("coin") or n:find("money") or n:find("gem"))) or
-                       (AutoInfinity and (n:find("infinity") or n:find("divine"))) then
+                    if (_G.AutoFarm and (n:find("brainrot") or n:find("pet"))) or
+                       (_G.AutoCollect and (n:find("cash") or n:find("coin") or n:find("money") or n:find("gem"))) or
+                       (_G.AutoInfinity and (n:find("infinity") or n:find("divine"))) then
                         firetouchinterest(root, item, 0)
-                        wait(0.02)
+                        wait(0.015)
                         firetouchinterest(root, item, 1)
                     end
                 end
@@ -167,8 +168,8 @@ end)
 
 -- Xóa sóng
 spawn(function()
-    while wait(0.15) do
-        if DestroyWave then
+    while wait(0.12) do
+        if _G.DestroyWave then
             pcall(function()
                 for _, obj in pairs(Workspace:GetDescendants()) do
                     local n = obj.Name:lower()
@@ -181,4 +182,4 @@ spawn(function()
     end
 end)
 
-game.StarterGui:SetCore("SendNotification", {Title = "🌊 DVG", Text = "Phiên bản siêu nhẹ đã sẵn sàng! Farm chill nào bro 🏖️", Duration = 6})
+game.StarterGui:SetCore("SendNotification", {Title = "🌊 DVG", Text = "Đã fix toggle! Bấm nút là farm thật sự chạy rồi bro 🏖️", Duration = 7})
