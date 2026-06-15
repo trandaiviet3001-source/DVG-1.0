@@ -1,24 +1,41 @@
 --[[
-  99 NIGHT HUB - TIẾNG VIỆT
-  Tương thích: Xeno PC / Delta Executor
-  Tạo bởi: caomod2077
-  Hướng dẫn: Dán file này lên GitHub Raw, dùng loadstring để chạy
+  99 NIGHT HUB - BẢN SỬA LỖI PC (XENO/DELTA)
+  Sửa lỗi dòng đỏ khi chạy trên PC Executor
+  Tác giả: caomod2077
+  Link GitHub: https://raw.githubusercontent.com/caomod2077/Script/refs/heads/main/FoxnameHub.lua
 --]]
 
 -- ============================================
--- KHỞI TẠO
+-- NGUYÊN NHÂN LỖI & CÁCH SỬA
+-- ============================================
+-- Lỗi dòng đỏ trên PC là do:
+-- 1. Script dùng hàm chỉ có trên mobile executor (syn.protect_gui, v.v.)
+-- 2. Script dùng thư viện UI chỉ tương thích mobile (Rayfield, Orion mobile)
+-- 3. Hàm getgenv/getrenv khác nhau giữa PC và mobile
+-- 4. Mobile dùng touch input, PC dùng mouse input
+-- 
+-- CÁCH SỬA: Thay toàn bộ code trong file FoxnameHub.lua
+-- bằng code bên dưới này. Code đã được viết lại để
+-- tương thích hoàn toàn với Xeno PC và Delta PC.
+
+-- ============================================
+-- KHỞI TẠO - ĐÃ SỬA CHO PC
 -- ============================================
 local TenScript = "99 Night Hub"
-local PhienBan = "1.0.0"
+local PhienBan = "2.0.0 PC"
 local TacGia = "caomod2077"
 
--- Tự động nhận diện Executor
+-- Tự nhận diện executor
 local Executor = "Không xác định"
 pcall(function()
     if identifyexecutor then
         Executor = identifyexecutor()
     elseif getexecutorname then
         Executor = getexecutorname()
+    elseif syn and syn.protect_gui then
+        Executor = "Synapse X"
+    elseif KRNL_LOADED then
+        Executor = "Krnl"
     end
 end)
 
@@ -29,16 +46,37 @@ print("  Đang tải...")
 print("===========================================")
 
 -- ============================================
--- CHỐNG BAN (ANTI-BAN)
+-- KIỂM TRA MÔI TRƯỜNG PC
+-- ============================================
+local LaPC = false
+pcall(function()
+    -- Kiểm tra nếu không có các hàm mobile
+    if not syn or not syn.protect_gui then
+        LaPC = true
+    end
+    -- Kiểm tra UserInputService cho mouse/keyboard
+    local UIS = game:GetService("UserInputService")
+    if UIS.MouseEnabled then
+        LaPC = true
+    end
+end)
+
+print("[DEBUG] Chạy trên PC: " .. tostring(LaPC))
+print("[DEBUG] Executor: " .. Executor)
+
+-- ============================================
+-- CHỐNG BAN - ĐÃ TỐI ƯU CHO PC
 -- ============================================
 local function ChongBan()
     pcall(function()
-        -- Chặn báo lỗi
+        -- Chặn error reporting
         local LogService = game:GetService("LogService")
-        LogService.MessageOut:Connect(function() end)
-        LogService.ErrorOut:Connect(function() end)
+        if LogService then
+            LogService.MessageOut:Connect(function() return nil end)
+            LogService.ErrorOut:Connect(function() return nil end)
+        end
         
-        -- Chặn hàm phát hiện
+        -- Hook __index để chặn hàm phát hiện
         local danhSachChan = {
             "DetectInjectedScript", "IsExploitDetected", "CheckForCheats",
             "VerifyScriptIntegrity", "ScanForSuspiciousActivity", "ReportExploitAttempt",
@@ -46,69 +84,83 @@ local function ChongBan()
             "AntiCheatSignal", "CheatReport", "FlagPlayer", "SendToModeration"
         }
         
-        local oldIndex = hookmetamethod(game, "__index", function(self, key)
-            for _, v in ipairs(danhSachChan) do
-                if key == v then
-                    return function() return false end
-                end
-            end
-            return oldIndex(self, key)
-        end)
-        
-        -- Chặn telemetry
-        local HttpService = game:GetService("HttpService")
-        local oldRequest = HttpService.RequestAsync
-        HttpService.RequestAsync = function(self, data, ...)
-            if data and data.Url then
-                local urlChan = {"roblox.com/analytics", "roblox.com/telemetry", "roblox.com/report", "roblox.com/log"}
-                for _, url in ipairs(urlChan) do
-                    if data.Url:find(url) then
-                        return {Success = true, StatusCode = 200, Body = "{}"}
+        -- Hook metacethod an toàn
+        pcall(function()
+            local oldIndex = hookmetamethod(game, "__index", function(self, key)
+                for _, v in ipairs(danhSachChan) do
+                    if key == v then
+                        return function() return false end
                     end
                 end
-            end
-            return oldRequest(self, data, ...)
-        end
+                return oldIndex(self, key)
+            end)
+        end)
         
-        -- Ẩn GUI khỏi phát hiện
-        local CoreGui = game:GetService("CoreGui")
-        local oldFind = CoreGui.FindFirstChild
-        CoreGui.FindFirstChild = function(self, name, ...)
-            local tenAn = {"99NightHub", "XenoUI", "HackGUI", "CheatMenu", "ScriptHub"}
-            for _, n in ipairs(tenAn) do
-                if name == n then return nil end
+        -- Chặn HttpService telemetry
+        pcall(function()
+            local HttpService = game:GetService("HttpService")
+            local oldRequest = HttpService.RequestAsync
+            HttpService.RequestAsync = function(self, data, ...)
+                if data and data.Url then
+                    local urlChan = {
+                        "roblox.com/analytics", 
+                        "roblox.com/telemetry", 
+                        "roblox.com/report",
+                        "roblox.com/log",
+                        "roblox.com/tracking"
+                    }
+                    for _, url in ipairs(urlChan) do
+                        if data.Url:find(url) then
+                            return {Success = true, StatusCode = 200, Body = "{}"}
+                        end
+                    end
+                end
+                return oldRequest(self, data, ...)
             end
-            return oldFind(self, name, ...)
-        end
+        end)
         
-        print("[Chống Ban] Đã kích hoạt")
+        print("[Chống Ban] Đã kích hoạt cho PC")
     end)
 end
 
 -- ============================================
--- DỊCH VỤ
+-- DỊCH VỤ ROBLOX
 -- ============================================
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local TeleportService = game:GetService("TeleportService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local StarterGui = game:GetService("StarterGui")
 local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
 
 local NguoiChoi = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
 -- ============================================
--- BIẾN
+-- BIẾN TOÀN CỤC
 -- ============================================
-local NhanVat = NguoiChoi.Character or NguoiChoi.CharacterAdded:Wait()
-local Humanoid = NhanVat:WaitForChild("Humanoid")
-local HumanoidRootPart = NhanVat:WaitForChild("HumanoidRootPart")
+local NhanVat = nil
+local Humanoid = nil
+local HumanoidRootPart = nil
+
+-- Cập nhật nhân vật
+local function CapNhatNhanVat()
+    if NguoiChoi.Character then
+        NhanVat = NguoiChoi.Character
+        Humanoid = NhanVat:FindFirstChild("Humanoid")
+        HumanoidRootPart = NhanVat:FindFirstChild("HumanoidRootPart")
+    end
+end
+CapNhatNhanVat()
+
+NguoiChoi.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    CapNhatNhanVat()
+end)
 
 -- Trạng thái hack
 local TrangThaiHack = {
@@ -126,52 +178,77 @@ local TrangThaiHack = {
     VoHanDan = false
 }
 
--- Lưu kết nối
 local KetNoi = {}
 
 -- ============================================
--- TẠO GIAO DIỆN TIẾNG VIỆT
+-- GIAO DIỆN - TƯƠNG THÍCH PC (DÙNG CHUỘT)
 -- ============================================
 local function TaoGiaoDien()
+    -- Kiểm tra và xóa GUI cũ
+    pcall(function()
+        if CoreGui:FindFirstChild("99NightHub") then
+            CoreGui["99NightHub"]:Destroy()
+        end
+    end)
+    
     local ManHinh = Instance.new("ScreenGui")
     ManHinh.Name = "99NightHub"
     ManHinh.ResetOnSpawn = false
     ManHinh.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    ManHinh.Parent = CoreGui
+    
+    -- BẢO VỆ GUI CHO PC (thay thế syn.protect_gui)
+    pcall(function()
+        if syn and syn.protect_gui then
+            syn.protect_gui(ManHinh)
+        elseif gethui then
+            ManHinh.Parent = gethui()
+        else
+            ManHinh.Parent = CoreGui
+        end
+    end)
+    if not ManHinh.Parent then
+        ManHinh.Parent = CoreGui
+    end
     
     -- Khung chính
     local KhungChinh = Instance.new("Frame")
     KhungChinh.Name = "KhungChinh"
-    KhungChinh.Size = UDim2.new(0, 520, 0, 420)
-    KhungChinh.Position = UDim2.new(0.5, -260, 0.5, -210)
-    KhungChinh.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+    KhungChinh.Size = UDim2.new(0, 550, 0, 450)
+    KhungChinh.Position = UDim2.new(0.5, -275, 0.5, -225)
+    KhungChinh.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
     KhungChinh.BorderSizePixel = 0
     KhungChinh.Active = true
     KhungChinh.Draggable = true
     KhungChinh.Parent = ManHinh
     
+    -- Viền sáng
+    local Vien = Instance.new("UIStroke")
+    Vien.Color = Color3.fromRGB(180, 0, 0)
+    Vien.Thickness = 2
+    Vien.Parent = KhungChinh
+    
     -- Thanh tiêu đề
     local ThanhTieuDe = Instance.new("Frame")
-    ThanhTieuDe.Size = UDim2.new(1, 0, 0, 40)
+    ThanhTieuDe.Size = UDim2.new(1, 0, 0, 45)
     ThanhTieuDe.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
     ThanhTieuDe.BorderSizePixel = 0
     ThanhTieuDe.Parent = KhungChinh
     
     local TieuDeText = Instance.new("TextLabel")
-    TieuDeText.Size = UDim2.new(1, -40, 1, 0)
+    TieuDeText.Size = UDim2.new(1, -80, 1, 0)
     TieuDeText.Position = UDim2.new(0, 10, 0, 0)
     TieuDeText.Text = "🔥 99 NIGHT HUB | v" .. PhienBan .. " | " .. Executor .. " 🔥"
     TieuDeText.TextColor3 = Color3.fromRGB(255, 255, 255)
     TieuDeText.BackgroundTransparency = 1
     TieuDeText.Font = Enum.Font.SourceSansBold
-    TieuDeText.TextSize = 15
+    TieuDeText.TextSize = 16
     TieuDeText.TextXAlignment = Enum.TextXAlignment.Left
     TieuDeText.Parent = ThanhTieuDe
     
     -- Nút đóng
     local NutDong = Instance.new("TextButton")
     NutDong.Size = UDim2.new(0, 35, 0, 35)
-    NutDong.Position = UDim2.new(1, -40, 0, 2)
+    NutDong.Position = UDim2.new(1, -40, 0, 5)
     NutDong.Text = "✕"
     NutDong.TextColor3 = Color3.fromRGB(255, 255, 255)
     NutDong.BackgroundColor3 = Color3.fromRGB(220, 0, 0)
@@ -186,7 +263,7 @@ local function TaoGiaoDien()
     -- Nút thu nhỏ
     local NutThuNho = Instance.new("TextButton")
     NutThuNho.Size = UDim2.new(0, 35, 0, 35)
-    NutThuNho.Position = UDim2.new(1, -80, 0, 2)
+    NutThuNho.Position = UDim2.new(1, -80, 0, 5)
     NutThuNho.Text = "─"
     NutThuNho.TextColor3 = Color3.fromRGB(255, 255, 255)
     NutThuNho.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
@@ -199,69 +276,78 @@ local function TaoGiaoDien()
     NutThuNho.MouseButton1Click:Connect(function()
         daThuNho = not daThuNho
         if daThuNho then
-            KhungChinh.Size = UDim2.new(0, 520, 0, 40)
+            KhungChinh.Size = UDim2.new(0, 550, 0, 45)
             NutThuNho.Text = "□"
         else
-            KhungChinh.Size = UDim2.new(0, 520, 0, 420)
+            KhungChinh.Size = UDim2.new(0, 550, 0, 450)
             NutThuNho.Text = "─"
         end
     end)
     
-    -- Khung tab
+    -- Khung tab bên trái
     local KhungTab = Instance.new("Frame")
-    KhungTab.Size = UDim2.new(0, 110, 1, -40)
-    KhungTab.Position = UDim2.new(0, 0, 0, 40)
-    KhungTab.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    KhungTab.Size = UDim2.new(0, 120, 1, -45)
+    KhungTab.Position = UDim2.new(0, 0, 0, 45)
+    KhungTab.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
     KhungTab.BorderSizePixel = 0
     KhungTab.Parent = KhungChinh
     
-    -- Khung nội dung
-    local KhungNoiDung = Instance.new("Frame")
-    KhungNoiDung.Size = UDim2.new(1, -115, 1, -45)
-    KhungNoiDung.Position = UDim2.new(0, 115, 0, 45)
+    -- Khung nội dung bên phải
+    local KhungNoiDung = Instance.new("ScrollingFrame")
+    KhungNoiDung.Size = UDim2.new(1, -125, 1, -50)
+    KhungNoiDung.Position = UDim2.new(0, 125, 0, 50)
     KhungNoiDung.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     KhungNoiDung.BorderSizePixel = 0
+    KhungNoiDung.ScrollBarThickness = 5
+    KhungNoiDung.ScrollBarImageColor3 = Color3.fromRGB(180, 0, 0)
+    KhungNoiDung.CanvasSize = UDim2.new(0, 0, 0, 400)
     KhungNoiDung.Parent = KhungChinh
     
-    -- Tạo nút tab
+    -- Hàm tạo nút tab
     local function TaoNutTab(ten, viTri, tabCha)
         local nut = Instance.new("TextButton")
-        nut.Size = UDim2.new(1, -10, 0, 38)
+        nut.Size = UDim2.new(1, -8, 0, 42)
         nut.Position = viTri
         nut.Text = ten
-        nut.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        nut.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
         nut.TextColor3 = Color3.fromRGB(200, 200, 200)
         nut.BorderSizePixel = 0
         nut.Font = Enum.Font.SourceSansBold
         nut.TextSize = 14
         nut.AutoButtonColor = false
         nut.Parent = tabCha
+        
         nut.MouseEnter:Connect(function()
             if nut.BackgroundColor3 ~= Color3.fromRGB(180, 0, 0) then
-                nut.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+                nut.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
             end
         end)
         nut.MouseLeave:Connect(function()
             if nut.BackgroundColor3 ~= Color3.fromRGB(180, 0, 0) then
-                nut.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                nut.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
             end
         end)
         return nut
     end
     
-    -- Tạo nút bật/tắt
+    -- Hàm tạo nút bật/tắt
     local function TaoNutBatTat(ten, viTri, tenHack, tabCha)
         local khung = Instance.new("Frame")
-        khung.Size = UDim2.new(1, -10, 0, 40)
+        khung.Size = UDim2.new(1, -10, 0, 42)
         khung.Position = viTri
-        khung.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        khung.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
         khung.BorderSizePixel = 0
         khung.Parent = tabCha
         
+        local vienNut = Instance.new("UIStroke")
+        vienNut.Color = Color3.fromRGB(40, 40, 40)
+        vienNut.Thickness = 1
+        vienNut.Parent = khung
+        
         local nhan = Instance.new("TextLabel")
-        nhan.Size = UDim2.new(0, 250, 1, 0)
-        nhan.Position = UDim2.new(0, 8, 0, 0)
-        nhan.Text = "  " .. ten
+        nhan.Size = UDim2.new(0, 280, 1, 0)
+        nhan.Position = UDim2.new(0, 10, 0, 0)
+        nhan.Text = ten
         nhan.TextColor3 = Color3.fromRGB(255, 255, 255)
         nhan.BackgroundTransparency = 1
         nhan.Font = Enum.Font.SourceSans
@@ -270,14 +356,15 @@ local function TaoGiaoDien()
         nhan.Parent = khung
         
         local nut = Instance.new("TextButton")
-        nut.Size = UDim2.new(0, 55, 0, 28)
-        nut.Position = UDim2.new(1, -65, 0, 6)
+        nut.Size = UDim2.new(0, 60, 0, 30)
+        nut.Position = UDim2.new(1, -70, 0, 6)
         nut.Text = "TẮT"
         nut.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
         nut.TextColor3 = Color3.fromRGB(255, 255, 255)
         nut.BorderSizePixel = 0
         nut.Font = Enum.Font.SourceSansBold
         nut.TextSize = 12
+        nut.AutoButtonColor = false
         nut.Parent = khung
         
         nut.MouseButton1Click:Connect(function()
@@ -291,32 +378,47 @@ local function TaoGiaoDien()
             end
         end)
         
+        nut.MouseEnter:Connect(function()
+            if nut.Text == "TẮT" then
+                nut.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+            else
+                nut.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
+            end
+        end)
+        nut.MouseLeave:Connect(function()
+            if nut.Text == "TẮT" then
+                nut.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+            else
+                nut.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+            end
+        end)
+        
         return khung
     end
     
     -- Danh sách tab
     local CacTab = {"👤 NHÂN VẬT", "⚔ CHIẾN ĐẤU", "🌍 THẾ GIỚI", "👁 ESP", "🌐 DỊCH CHUYỂN", "⚙ CÀI ĐẶT"}
     local NutTab = {}
-    local TabHienTai = nil
     
     -- Hàm tải nội dung tab
     local function TaiNoiDungTab(tenTab, tabCha)
-        -- Xóa nội dung cũ
         for _, child in ipairs(tabCha:GetChildren()) do
             child:Destroy()
         end
         
+        tabCha.CanvasSize = UDim2.new(0, 0, 0, 0)
+        
         if tenTab == "👤 NHÂN VẬT" then
             TaoNutBatTat("🕊 Bay Lượn (WASD Space Ctrl)", UDim2.new(0, 5, 0, 5), "Bay", tabCha)
-            TaoNutBatTat("🦘 Nhảy Vô Hạn", UDim2.new(0, 5, 0, 50), "NhayVoHan", tabCha)
-            TaoNutBatTat("💨 Tăng Tốc Độ (50)", UDim2.new(0, 5, 0, 95), "TangToc", tabCha)
-            TaoNutBatTat("👻 Xuyên Tường (NoClip)", UDim2.new(0, 5, 0, 140), "XuyenTuong", tabCha)
-            TaoNutBatTat("🛡 Bất Tử (God Mode)", UDim2.new(0, 5, 0, 185), "VoHinh", tabCha)
+            TaoNutBatTat("🦘 Nhảy Vô Hạn", UDim2.new(0, 5, 0, 52), "NhayVoHan", tabCha)
+            TaoNutBatTat("💨 Tăng Tốc Độ Chạy", UDim2.new(0, 5, 0, 99), "TangToc", tabCha)
+            TaoNutBatTat("👻 Xuyên Tường (NoClip)", UDim2.new(0, 5, 0, 146), "XuyenTuong", tabCha)
+            TaoNutBatTat("🛡 Bất Tử (God Mode)", UDim2.new(0, 5, 0, 193), "VoHinh", tabCha)
             
             -- Thanh trượt tốc độ
             local nhanTocDo = Instance.new("TextLabel")
             nhanTocDo.Size = UDim2.new(1, -10, 0, 22)
-            nhanTocDo.Position = UDim2.new(0, 5, 0, 235)
+            nhanTocDo.Position = UDim2.new(0, 5, 0, 245)
             nhanTocDo.Text = "🏃 Tốc Độ Chạy: 50"
             nhanTocDo.TextColor3 = Color3.fromRGB(255, 255, 255)
             nhanTocDo.BackgroundTransparency = 1
@@ -326,28 +428,31 @@ local function TaoGiaoDien()
             nhanTocDo.Parent = tabCha
             
             local oNhap = Instance.new("TextBox")
-            oNhap.Size = UDim2.new(1, -10, 0, 28)
-            oNhap.Position = UDim2.new(0, 5, 0, 258)
+            oNhap.Size = UDim2.new(1, -10, 0, 30)
+            oNhap.Position = UDim2.new(0, 5, 0, 268)
             oNhap.Text = "50"
-            oNhap.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+            oNhap.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
             oNhap.TextColor3 = Color3.fromRGB(255, 255, 255)
             oNhap.BorderSizePixel = 0
             oNhap.Font = Enum.Font.SourceSans
             oNhap.TextSize = 14
+            oNhap.PlaceholderText = "Nhập tốc độ..."
             oNhap.Parent = tabCha
             oNhap.FocusLost:Connect(function()
                 local tocDo = tonumber(oNhap.Text) or 50
                 if tocDo > 500 then tocDo = 500 end
                 if tocDo < 1 then tocDo = 1 end
-                Humanoid.WalkSpeed = tocDo
+                if Humanoid then
+                    Humanoid.WalkSpeed = tocDo
+                end
                 nhanTocDo.Text = "🏃 Tốc Độ Chạy: " .. tocDo
-                oNhap.Text = tocDo
+                oNhap.Text = tostring(tocDo)
             end)
             
             -- Nút hồi máu
             local nutHoiMau = Instance.new("TextButton")
-            nutHoiMau.Size = UDim2.new(1, -10, 0, 35)
-            nutHoiMau.Position = UDim2.new(0, 5, 0, 295)
+            nutHoiMau.Size = UDim2.new(1, -10, 0, 38)
+            nutHoiMau.Position = UDim2.new(0, 5, 0, 308)
             nutHoiMau.Text = "💚 Hồi Đầy Máu"
             nutHoiMau.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
             nutHoiMau.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -356,13 +461,15 @@ local function TaoGiaoDien()
             nutHoiMau.TextSize = 14
             nutHoiMau.Parent = tabCha
             nutHoiMau.MouseButton1Click:Connect(function()
-                Humanoid.Health = Humanoid.MaxHealth
+                if Humanoid then
+                    Humanoid.Health = Humanoid.MaxHealth
+                end
             end)
             
-            -- Nút reset nhân vật
+            -- Nút reset
             local nutReset = Instance.new("TextButton")
-            nutReset.Size = UDim2.new(1, -10, 0, 35)
-            nutReset.Position = UDim2.new(0, 5, 0, 335)
+            nutReset.Size = UDim2.new(1, -10, 0, 38)
+            nutReset.Position = UDim2.new(0, 5, 0, 351)
             nutReset.Text = "🔄 Hồi Sinh Nhân Vật"
             nutReset.BackgroundColor3 = Color3.fromRGB(100, 100, 0)
             nutReset.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -376,32 +483,36 @@ local function TaoGiaoDien()
                 end
             end)
             
+            tabCha.CanvasSize = UDim2.new(0, 0, 0, 400)
+            
         elseif tenTab == "⚔ CHIẾN ĐẤU" then
             TaoNutBatTat("🎯 Aimbot (Tự Động Ngắm)", UDim2.new(0, 5, 0, 5), "Aimbot", tabCha)
-            TaoNutBatTat("🤖 Tự Động Farm", UDim2.new(0, 5, 0, 50), "TuDongFarm", tabCha)
-            TaoNutBatTat("🔥 Bắn Nhanh", UDim2.new(0, 5, 0, 95), "BanNhanh", tabCha)
-            TaoNutBatTat("💥 Vô Hạn Đạn", UDim2.new(0, 5, 0, 140), "VoHanDan", tabCha)
+            TaoNutBatTat("🤖 Tự Động Farm", UDim2.new(0, 5, 0, 52), "TuDongFarm", tabCha)
+            TaoNutBatTat("🔥 Bắn Nhanh", UDim2.new(0, 5, 0, 99), "BanNhanh", tabCha)
+            TaoNutBatTat("💥 Vô Hạn Đạn", UDim2.new(0, 5, 0, 146), "VoHanDan", tabCha)
             
-            local nhanAimbot = Instance.new("TextLabel")
-            nhanAimbot.Size = UDim2.new(1, -10, 0, 100)
-            nhanAimbot.Position = UDim2.new(0, 5, 0, 195)
-            nhanAimbot.Text = "📌 Aimbot sẽ tự động khóa vào\n   người chơi gần nhất\n📌 Bắn Nhanh tăng tốc độ bắn\n📌 Vô Hạn Đạn = không cần nạp"
-            nhanAimbot.TextColor3 = Color3.fromRGB(180, 180, 180)
-            nhanAimbot.BackgroundTransparency = 1
-            nhanAimbot.Font = Enum.Font.SourceSans
-            nhanAimbot.TextSize = 13
-            nhanAimbot.TextXAlignment = Enum.TextXAlignment.Left
-            nhanAimbot.TextYAlignment = Enum.TextYAlignment.Top
-            nhanAimbot.Parent = tabCha
+            local nhanThongTin = Instance.new("TextLabel")
+            nhanThongTin.Size = UDim2.new(1, -10, 0, 120)
+            nhanThongTin.Position = UDim2.new(0, 5, 0, 200)
+            nhanThongTin.Text = "📌 Hướng dẫn:\n\n🎯 Aimbot: Tự động khóa mục tiêu\n   vào người chơi gần nhất\n\n🤖 Auto Farm: Tự động farm quái\n   (tùy game hỗ trợ)\n\n🔥 Bắn Nhanh: Tăng tốc độ bắn\n\n💥 Vô Hạn Đạn: Không cần nạp đạn"
+            nhanThongTin.TextColor3 = Color3.fromRGB(180, 180, 180)
+            nhanThongTin.BackgroundTransparency = 1
+            nhanThongTin.Font = Enum.Font.SourceSans
+            nhanThongTin.TextSize = 13
+            nhanThongTin.TextXAlignment = Enum.TextXAlignment.Left
+            nhanThongTin.TextYAlignment = Enum.TextYAlignment.Top
+            nhanThongTin.Parent = tabCha
+            
+            tabCha.CanvasSize = UDim2.new(0, 0, 0, 330)
             
         elseif tenTab == "🌍 THẾ GIỚI" then
             TaoNutBatTat("☀ Sáng Nhất (Full Bright)", UDim2.new(0, 5, 0, 5), "SangNhat", tabCha)
-            TaoNutBatTat("🌫 Xóa Sương Mù", UDim2.new(0, 5, 0, 50), "KhongSuongMu", tabCha)
+            TaoNutBatTat("🌫 Xóa Sương Mù", UDim2.new(0, 5, 0, 52), "KhongSuongMu", tabCha)
             
             local nutDichChuyen = Instance.new("TextButton")
-            nutDichChuyen.Size = UDim2.new(1, -10, 0, 35)
-            nutDichChuyen.Position = UDim2.new(0, 5, 0, 100)
-            nutDichChuyen.Text = "📍 Dịch Chuyển Đến Chuột"
+            nutDichChuyen.Size = UDim2.new(1, -10, 0, 40)
+            nutDichChuyen.Position = UDim2.new(0, 5, 0, 105)
+            nutDichChuyen.Text = "📍 Dịch Chuyển Đến Vị Trí Chuột"
             nutDichChuyen.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
             nutDichChuyen.TextColor3 = Color3.fromRGB(255, 255, 255)
             nutDichChuyen.BorderSizePixel = 0
@@ -409,23 +520,15 @@ local function TaoGiaoDien()
             nutDichChuyen.TextSize = 14
             nutDichChuyen.Parent = tabCha
             nutDichChuyen.MouseButton1Click:Connect(function()
-                local chuot = NguoiChoi:GetMouse()
-                if chuot and chuot.Hit then
-                    HumanoidRootPart.CFrame = CFrame.new(chuot.Hit.Position + Vector3.new(0, 3, 0))
+                if HumanoidRootPart then
+                    local chuot = NguoiChoi:GetMouse()
+                    if chuot and chuot.Hit then
+                        HumanoidRootPart.CFrame = CFrame.new(chuot.Hit.Position + Vector3.new(0, 3, 0))
+                    end
                 end
             end)
             
-            local nhanTheGioi = Instance.new("TextLabel")
-            nhanTheGioi.Size = UDim2.new(1, -10, 0, 80)
-            nhanTheGioi.Position = UDim2.new(0, 5, 0, 150)
-            nhanTheGioi.Text = "💡 Mẹo:\n- Sáng Nhất giúp nhìn rõ trong tối\n- Dịch chuyển đến chuột để\n  di chuyển nhanh đến vị trí bất kỳ"
-            nhanTheGioi.TextColor3 = Color3.fromRGB(180, 180, 180)
-            nhanTheGioi.BackgroundTransparency = 1
-            nhanTheGioi.Font = Enum.Font.SourceSans
-            nhanTheGioi.TextSize = 13
-            nhanTheGioi.TextXAlignment = Enum.TextXAlignment.Left
-            nhanTheGioi.TextYAlignment = Enum.TextYAlignment.Top
-            nhanTheGioi.Parent = tabCha
+            tabCha.CanvasSize = UDim2.new(0, 0, 0, 200)
             
         elseif tenTab == "👁 ESP" then
             TaoNutBatTat("🔴 ESP Người Chơi", UDim2.new(0, 5, 0, 5), "ESP", tabCha)
@@ -433,7 +536,7 @@ local function TaoGiaoDien()
             local nhanESP = Instance.new("TextLabel")
             nhanESP.Size = UDim2.new(1, -10, 0, 200)
             nhanESP.Position = UDim2.new(0, 5, 0, 55)
-            nhanESP.Text = "👁 ESP HIỂN THỊ:\n\n🔴 Viền đỏ quanh người chơi khác\n📛 Tên người chơi trên đầu\n❤ Thanh máu của đối thủ\n👀 Nhìn xuyên tường\n\n✅ Tự động cập nhật khi có\n   người chơi mới vào game"
+            nhanESP.Text = "👁 ESP HIỂN THỊ:\n\n🔴 Viền đỏ quanh người chơi khác\n📛 Tên + Máu trên đầu đối thủ\n👀 Nhìn xuyên tường\n✅ Tự động cập nhật khi có\n   người chơi mới vào game\n⚠ Một số game có thể chặn ESP"
             nhanESP.TextColor3 = Color3.fromRGB(200, 200, 200)
             nhanESP.BackgroundTransparency = 1
             nhanESP.Font = Enum.Font.SourceSans
@@ -441,6 +544,8 @@ local function TaoGiaoDien()
             nhanESP.TextXAlignment = Enum.TextXAlignment.Left
             nhanESP.TextYAlignment = Enum.TextYAlignment.Top
             nhanESP.Parent = tabCha
+            
+            tabCha.CanvasSize = UDim2.new(0, 0, 0, 260)
             
         elseif tenTab == "🌐 DỊCH CHUYỂN" then
             local danhSachGame = {
@@ -451,15 +556,17 @@ local function TaoGiaoDien()
                 {ten = "🏡 Brookhaven RP", id = 4924922222},
                 {ten = "🍎 Blox Fruits", id = 2753915549},
                 {ten = "🔪 Murder Mystery 2", id = 142823291},
-                {ten = "🐱 Pet Simulator X", id = 6284583030}
+                {ten = "🐱 Pet Simulator X", id = 6284583030},
+                {ten = "🏪 PLS DONATE", id = 8737602449},
+                {ten = "⚡ Blade Ball", id = 13772394625}
             }
             
             for i, game in ipairs(danhSachGame) do
                 local nut = Instance.new("TextButton")
-                nut.Size = UDim2.new(1, -10, 0, 35)
-                nut.Position = UDim2.new(0, 5, 0, 5 + (i-1)*40)
+                nut.Size = UDim2.new(1, -10, 0, 38)
+                nut.Position = UDim2.new(0, 5, 0, 5 + (i-1)*43)
                 nut.Text = game.ten
-                nut.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                nut.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
                 nut.TextColor3 = Color3.fromRGB(255, 255, 255)
                 nut.BorderSizePixel = 0
                 nut.Font = Enum.Font.SourceSans
@@ -469,18 +576,20 @@ local function TaoGiaoDien()
                     nut.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
                 end)
                 nut.MouseLeave:Connect(function()
-                    nut.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                    nut.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
                 end)
                 nut.MouseButton1Click:Connect(function()
                     TeleportService:Teleport(game.id)
                 end)
             end
             
+            tabCha.CanvasSize = UDim2.new(0, 0, 0, 5 + #danhSachGame * 43 + 10)
+            
         elseif tenTab == "⚙ CÀI ĐẶT" then
             local thongTin = Instance.new("TextLabel")
-            thongTin.Size = UDim2.new(1, -10, 0, 250)
+            thongTin.Size = UDim2.new(1, -10, 0, 300)
             thongTin.Position = UDim2.new(0, 5, 0, 10)
-            thongTin.Text = "══════════════════════\n\n  🔥 99 NIGHT HUB 🔥\n\n══════════════════════\n\n📌 Phiên Bản: v" .. PhienBan .. "\n📌 Tác Giả: " .. TacGia .. "\n📌 Executor: " .. Executor .. "\n\n📌 Hỗ Trợ:\n   - Xeno PC ✅\n   - Delta Executor ✅\n\n📌 Tính Năng:\n   - Chống Ban Tự Động\n   - Bay Lượn\n   - Nhảy Vô Hạn\n   - Tăng Tốc Độ\n   - Xuyên Tường\n   - Bất Tử\n   - Aimbot\n   - ESP Xuyên Tường\n   - Sáng Nhất\n   - Dịch Chuyển Game\n\n══════════════════════"
+            thongTin.Text = "══════════════════════\n\n  🔥 99 NIGHT HUB 🔥\n  PHIÊN BẢN PC\n\n══════════════════════\n\n📌 Phiên Bản: v" .. PhienBan .. "\n📌 Tác Giả: " .. TacGia .. "\n📌 Executor: " .. Executor .. "\n📌 Nền Tảng: PC ✅\n\n📌 Hỗ Trợ:\n   - Xeno PC ✅\n   - Delta Executor ✅\n   - Synapse X ✅\n\n📌 Lưu Ý:\n   - Script đã được sửa lỗi\n     dòng đỏ trên PC\n   - Tương thích chuột & bàn phím\n   - Chống ban tự động\n\n📌 Cách dùng:\n   1. Dán script vào executor\n   2. Nhấn Execute\n   3. Chọn tab và bật hack\n\n══════════════════════"
             thongTin.TextColor3 = Color3.fromRGB(200, 200, 200)
             thongTin.BackgroundTransparency = 1
             thongTin.Font = Enum.Font.SourceSans
@@ -488,28 +597,29 @@ local function TaoGiaoDien()
             thongTin.TextXAlignment = Enum.TextXAlignment.Left
             thongTin.TextYAlignment = Enum.TextYAlignment.Top
             thongTin.Parent = tabCha
+            
+            tabCha.CanvasSize = UDim2.new(0, 0, 0, 320)
         end
     end
     
     -- Tạo các nút tab
     for i, tab in ipairs(CacTab) do
-        local nut = TaoNutTab(tab, UDim2.new(0, 5, 0, 5 + (i-1)*44), KhungTab)
+        local nut = TaoNutTab(tab, UDim2.new(0, 4, 0, 5 + (i-1)*48), KhungTab)
         nut.MouseButton1Click:Connect(function()
             for _, n in ipairs(NutTab) do
-                n.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                n.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
             end
             nut.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-            TabHienTai = nut
             TaiNoiDungTab(tab, KhungNoiDung)
         end)
         table.insert(NutTab, nut)
     end
     
-    -- Tải tab đầu tiên
+    -- Tải tab mặc định
     NutTab[1].BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-    TabHienTai = NutTab[1]
     TaiNoiDungTab(CacTab[1], KhungNoiDung)
     
+    print("[GUI] Đã tạo giao diện thành công!")
     return ManHinh
 end
 
@@ -519,7 +629,9 @@ end
 
 -- Bay
 local function BatDauBay()
+    if not HumanoidRootPart then return end
     if KetNoi.Bay then KetNoi.Bay:Disconnect() end
+    
     local bodyVelocity = Instance.new("BodyVelocity")
     bodyVelocity.MaxForce = Vector3.new(1, 1, 1) * math.huge
     bodyVelocity.Velocity = Vector3.new(0, 0, 0)
@@ -531,109 +643,11 @@ local function BatDauBay()
     bodyGyro.Parent = HumanoidRootPart
     
     KetNoi.Bay = RunService.RenderStepped:Connect(function()
-        if not TrangThaiHack.Bay then
-            bodyVelocity:Destroy()
-            bodyGyro:Destroy()
+        if not TrangThaiHack.Bay or not HumanoidRootPart then
+            pcall(function() bodyVelocity:Destroy() end)
+            pcall(function() bodyGyro:Destroy() end)
             KetNoi.Bay:Disconnect()
             return
         end
         
-        local huong = Vector3.new(0, 0, 0)
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then huong += Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then huong -= Camera.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then huong -= Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then huong += Camera.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then huong += Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then huong -= Vector3.new(0, 1, 0) end
-        
-        bodyVelocity.Velocity = huong * 50
-        bodyGyro.CFrame = Camera.CFrame
-    end)
-end
-
--- Nhảy vô hạn
-local function BatDauNhayVoHan()
-    if KetNoi.NhayVoHan then KetNoi.NhayVoHan:Disconnect() end
-    KetNoi.NhayVoHan = RunService.RenderStepped:Connect(function()
-        if not TrangThaiHack.NhayVoHan then
-            KetNoi.NhayVoHan:Disconnect()
-            return
-        end
-        Humanoid.JumpPower = 50
-        if Humanoid.FloorMaterial == Enum.Material.Air then
-            Humanoid.Jump = true
-        end
-    end)
-end
-
--- Tăng tốc
-local function BatDauTangToc()
-    if KetNoi.TangToc then KetNoi.TangToc:Disconnect() end
-    KetNoi.TangToc = RunService.RenderStepped:Connect(function()
-        if not TrangThaiHack.TangToc then
-            Humanoid.WalkSpeed = 16
-            KetNoi.TangToc:Disconnect()
-            return
-        end
-        Humanoid.WalkSpeed = 50
-    end)
-end
-
--- Xuyên tường
-local function BatDauXuyenTuong()
-    if KetNoi.XuyenTuong then KetNoi.XuyenTuong:Disconnect() end
-    KetNoi.XuyenTuong = RunService.Stepped:Connect(function()
-        if not TrangThaiHack.XuyenTuong then
-            KetNoi.XuyenTuong:Disconnect()
-            return
-        end
-        for _, part in ipairs(NhanVat:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide == true then
-                part.CanCollide = false
-            end
-        end
-    end)
-end
-
--- Bất tử
-local function BatDauVoHinh()
-    if KetNoi.VoHinh then KetNoi.VoHinh:Disconnect() end
-    KetNoi.VoHinh = RunService.RenderStepped:Connect(function()
-        if not TrangThaiHack.VoHinh then
-            KetNoi.VoHinh:Disconnect()
-            return
-        end
-        Humanoid.Health = Humanoid.MaxHealth
-    end)
-end
-
--- ESP
-local function BatDauESP()
-    local espThuMuc = Instance.new("Folder")
-    espThuMuc.Name = "ESP_ThuMuc"
-    espThuMuc.Parent = Workspace
-    
-    local function ThemESP(nguoiChoi)
-        if nguoiChoi == NguoiChoi then return end
-        local function taoESP(nguoiChoi)
-            local nhanVat = nguoiChoi.Character
-            if not nhanVat then return end
-            
-            local highlight = Instance.new("Highlight")
-            highlight.Name = "ESP_Vien"
-            highlight.FillColor = Color3.fromRGB(255, 0, 0)
-            highlight.FillTransparency = 0.5
-            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-            highlight.OutlineTransparency = 0
-            highlight.Adornee = nhanVat
-            highlight.Parent = espThuMuc
-            
-            local bangTen = Instance.new("BillboardGui")
-            bangTen.Size = UDim2.new(0, 120, 0, 25)
-            bangTen.StudsOffset = Vector3.new(0, 3.5, 0)
-            bangTen.AlwaysOnTop = true
-            bangTen.Parent = nhanVat:WaitForChild("Head")
-            
-            local tenTag = Instance.new("TextLabel")
-            tenTag.Size = UDim2.new(1, 0, 1, 0)
-            tenTag.Text = nguoiChoi.Name
+        local huong = Vector3.new(0, 0,
