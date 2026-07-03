@@ -1,8 +1,7 @@
 -- =====================================================================
--- MM2 KILLER FINDER - HOÀN CHỈNH - COPY TOÀN BỘ
+-- KẺ NGHI VẤN - ESP + GOD + SPEED + TP KẺ GIẾT + KÉO + FIX LAG
 -- =====================================================================
--- Dùng cho: Delta X, Xeno, KRNL, Fluxus
--- Cách dùng: Ctrl+A -> Ctrl+C -> Vào Executor -> Ctrl+V -> Execute
+-- Dùng cho Delta X - Hoạt động 100%
 -- =====================================================================
 
 local Players = game:GetService("Players")
@@ -13,21 +12,17 @@ local CoreGui = game:GetService("CoreGui")
 local Workspace = game:GetService("Workspace")
 local StarterGui = game:GetService("StarterGui")
 local Lighting = game:GetService("Lighting")
-local UserInputService = game:GetService("UserInputService")
 
--- Xóa GUI cũ
 pcall(function()
-    for _, n in pairs({"MM2_Final", "MM2_Mini", "RoleMenu"}) do
+    for _, n in pairs({"NV_Final", "NV_Mini"}) do
         if CoreGui:FindFirstChild(n) then CoreGui:FindFirstChild(n):Destroy() end
     end
 end)
 
-local S = {ESP = true, GOD = false, SPD = false, INVIS = false}
-local UserRoles = {}
-local MurdererName = nil
+local S = {ESP = true, GOD = false, SPD = false}
 
 -- =====================================================================
--- TÌM KẺ GIẾT (DAO = KẺ GIẾT)
+-- TÌM KẺ GIẾT (AI CẦM DAO)
 -- =====================================================================
 local function FindMurderer()
     for _, p in pairs(Players:GetPlayers()) do
@@ -37,7 +32,7 @@ local function FindMurderer()
                     if v:IsA("Tool") then
                         local tn = v.Name:lower()
                         if tn:find("knife") or tn:find("dao") or tn:find("sword") or tn:find("blade") or tn:find("dagger") or tn:find("kill") then
-                            MurdererName = p.Name; return p
+                            return p
                         end
                     end
                 end
@@ -46,7 +41,7 @@ local function FindMurderer()
                 for _, v in pairs(p.Backpack:GetChildren()) do
                     if v:IsA("Tool") then
                         local tn = v.Name:lower()
-                        if tn:find("knife") or tn:find("dao") then MurdererName = p.Name; return p end
+                        if tn:find("knife") or tn:find("dao") then return p end
                     end
                 end
             end
@@ -56,111 +51,110 @@ local function FindMurderer()
 end
 
 -- =====================================================================
--- VAI TRÒ
+-- ESP ĐỎ
 -- =====================================================================
-local function GetRole(player)
-    if UserRoles[player.Name] then return UserRoles[player.Name] end
-    if MurdererName and player.Name == MurdererName then return "MURDERER" end
-    if player.Character then
-        for _, v in pairs(player.Character:GetChildren()) do
-            if v:IsA("Tool") then
-                local tn = v.Name:lower()
-                if tn:find("gun") or tn:find("súng") or tn:find("pistol") then return "SHERIFF"
-                elseif tn:find("knife") or tn:find("dao") then return "MURDERER" end
-            end
-        end
-    end
-    if player.Team then
-        local tn = player.Team.Name:lower()
-        if tn:find("murder") or tn:find("kill") then return "MURDERER"
-        elseif tn:find("sheriff") or tn:find("police") then return "SHERIFF"
-        elseif tn:find("innocent") then return "INNOCENT" end
-    end
-    return "INNOCENT"
-end
+local circles = {}
+local texts = {}
 
--- =====================================================================
--- MÀU
--- =====================================================================
-local function GetColor(role)
-    if role == "MURDERER" then return Color3.new(1, 0, 0)
-    elseif role == "SHERIFF" then return Color3.new(0.1, 0.4, 1)
-    else return Color3.new(0, 1, 0) end
-end
-local function GetTag(role)
-    if role == "MURDERER" then return "KE GIET"
-    elseif role == "SHERIFF" then return "CANH SAT"
-    else return "VO TOI" end
-end
-
--- =====================================================================
--- ESP HIGHLIGHT
--- =====================================================================
-local highlights = {}
 local function UpdateESP()
-    pcall(function()
-        for _, player in pairs(Players:GetPlayers()) do
-            if player == LocalPlayer then goto continue end
-            if not player.Character then
-                if highlights[player.Name] then pcall(function() highlights[player.Name]:Destroy() end); highlights[player.Name] = nil end
-                goto continue
-            end
-            if S.ESP then
-                if not highlights[player.Name] then
-                    local h = Instance.new("Highlight")
-                    h.FillTransparency = 0.8; h.OutlineTransparency = 0
-                    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                    h.Parent = player.Character; highlights[player.Name] = h
-                end
-                local role = GetRole(player); local color = GetColor(role)
-                highlights[player.Name].FillColor = color; highlights[player.Name].OutlineColor = color
-            else
-                if highlights[player.Name] then pcall(function() highlights[player.Name]:Destroy() end); highlights[player.Name] = nil end
-            end
-            ::continue::
+    for _, player in pairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if not player.Character or not player.Character:FindFirstChild("Head") then
+            if circles[player.Name] then pcall(function() circles[player.Name]:Remove() end); circles[player.Name] = nil end
+            if texts[player.Name] then pcall(function() texts[player.Name]:Remove() end); texts[player.Name] = nil end
+            continue
         end
-        for name, h in pairs(highlights) do
-            if not Players:FindFirstChild(name) then pcall(function() h:Destroy() end); highlights[name] = nil end
+        local head = player.Character:FindFirstChild("Head")
+        local root = player.Character:FindFirstChild("HumanoidRootPart")
+        if not head or not root then continue end
+        
+        if not circles[player.Name] then
+            local c = Drawing.new("Circle"); c.Radius = 8; c.Thickness = 2; c.Filled = false; circles[player.Name] = c
         end
-    end)
+        if not texts[player.Name] then
+            local t = Drawing.new("Text"); t.Size = 14; t.Center = true; t.Outline = true; texts[player.Name] = t
+        end
+        
+        local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+        local dist = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") 
+            and (LocalPlayer.Character.HumanoidRootPart.Position - root.Position).Magnitude or 0
+        
+        if onScreen and dist < 500 and S.ESP then
+            circles[player.Name].Position = Vector2.new(headPos.X, headPos.Y)
+            circles[player.Name].Color = Color3.new(1, 0, 0)
+            circles[player.Name].Visible = true
+            local distText = dist >= 1000 and string.format("%.2f km", dist/1000) or string.format("%.0f m", dist)
+            texts[player.Name].Position = Vector2.new(headPos.X, headPos.Y - 22)
+            texts[player.Name].Text = player.Name .. " | " .. distText
+            texts[player.Name].Color = Color3.new(1, 0, 0)
+            texts[player.Name].Visible = true
+        else
+            circles[player.Name].Visible = false; texts[player.Name].Visible = false
+        end
+    end
+    for name, c in pairs(circles) do if not Players:FindFirstChild(name) then pcall(function() c:Remove() end); circles[name] = nil end end
+    for name, t in pairs(texts) do if not Players:FindFirstChild(name) then pcall(function() t:Remove() end); texts[name] = nil end end
 end
 
 -- =====================================================================
--- CHỨC NĂNG
+-- GOD MODE
 -- =====================================================================
 local function ToggleGod()
     S.GOD = not S.GOD
     if S.GOD then spawn(function() while S.GOD do pcall(function() if LocalPlayer.Character then local h = LocalPlayer.Character:FindFirstChild("Humanoid"); if h then h.Health = h.MaxHealth end end end); wait(0.05) end end) end
 end
+
+-- =====================================================================
+-- SPEED
+-- =====================================================================
 local function ToggleSpeed()
     S.SPD = not S.SPD
     pcall(function() if LocalPlayer.Character then local h = LocalPlayer.Character:FindFirstChild("Humanoid"); if h then h.WalkSpeed = S.SPD and 50 or 16 end end end)
 end
-local function ToggleInvis()
-    S.INVIS = not S.INVIS
-    if S.INVIS then
-        spawn(function()
-            while S.INVIS and LocalPlayer.Character do
-                pcall(function()
-                    for _, part in pairs(LocalPlayer.Character:GetChildren()) do
-                        if part:IsA("BasePart") then part.Transparency = 1; part.CanCollide = false
-                        elseif part:IsA("Decal") then part.Transparency = 1 end
-                    end
-                    local head = LocalPlayer.Character:FindFirstChild("Head"); if head then head.Transparency = 1 end
-                    local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-                    if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None; hum.NameDisplayDistance = 0; hum.HealthDisplayDistance = 0 end
-                end)
-                wait(0.1)
-            end
-        end)
-    end
-end
+
+-- =====================================================================
+-- TP ĐẾN NGƯỜI CHƠI
+-- =====================================================================
 local function TPTo(player)
     if not player or not player.Character then return end
     local root = player.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
     LocalPlayer.Character.HumanoidRootPart.CFrame = root.CFrame + Vector3.new(0, 2, 0)
 end
+
+-- =====================================================================
+-- TP ĐẾN KẺ GIẾT
+-- =====================================================================
+local function TPToMurderer()
+    local murderer = FindMurderer()
+    if murderer then
+        TPTo(murderer)
+        StarterGui:SetCore("SendNotification", {Title = "TP KE GIET", Text = "Da TP den " .. murderer.Name, Duration = 2})
+    else
+        StarterGui:SetCore("SendNotification", {Title = "TP KE GIET", Text = "Chua tim thay Ke Giet!", Duration = 2})
+    end
+end
+
+-- =====================================================================
+-- TP ĐẾN NGƯỜI GẦN NHẤT
+-- =====================================================================
+local function TPToNearest()
+    local best = nil; local bestD = 9999
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+            if root and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local d = (LocalPlayer.Character.HumanoidRootPart.Position - root.Position).Magnitude
+                if d < bestD then bestD = d; best = p end
+            end
+        end
+    end
+    if best then TPTo(best) end
+end
+
+-- =====================================================================
+-- KÉO NGƯỜI NGẪU NHIÊN
+-- =====================================================================
 local function PullRandom()
     local targets = {}
     for _, p in pairs(Players:GetPlayers()) do
@@ -172,6 +166,10 @@ local function PullRandom()
         StarterGui:SetCore("SendNotification", {Title = "KEO NGUOI", Text = "Da keo " .. target.Name, Duration = 2})
     end
 end
+
+-- =====================================================================
+-- FIX LAG
+-- =====================================================================
 local function FixLag()
     pcall(function()
         Lighting.GlobalShadows = false; Lighting.FogEnd = 9999999; Lighting.Brightness = 2
@@ -183,56 +181,18 @@ local function FixLag()
 end
 
 -- =====================================================================
--- MENU GÁN VAI TRÒ
--- =====================================================================
-local function ShowRoleMenu(player, position)
-    if CoreGui:FindFirstChild("RoleMenu") then CoreGui:FindFirstChild("RoleMenu"):Destroy() end
-    local qm = Instance.new("ScreenGui", CoreGui); qm.Name = "RoleMenu"
-    local qf = Instance.new("Frame", qm); qf.Size = UDim2.new(0, 150, 0, 120); qf.Position = UDim2.new(0, position.X, 0, position.Y)
-    qf.BackgroundColor3 = Color3.fromRGB(10,10,15); qf.BorderColor3 = Color3.fromRGB(255,255,255); qf.BorderSizePixel = 1
-    local role = GetRole(player)
-    local qt = Instance.new("TextLabel", qf); qt.Size = UDim2.new(1,0,0,22); qt.BackgroundColor3 = GetColor(role)
-    qt.Text = player.Name .. " - " .. GetTag(role); qt.TextColor3 = Color3.new(1,1,1); qt.Font = Enum.Font.SourceSansBold; qt.TextSize = 10
-    local roles = {
-        {"🔴 KE GIET", "MURDERER", Color3.fromRGB(200, 30, 30)},
-        {"🔵 CANH SAT", "SHERIFF", Color3.fromRGB(30, 60, 200)},
-        {"🟢 VO TOI", "INNOCENT", Color3.fromRGB(30, 180, 30)},
-    }
-    for i, r in pairs(roles) do
-        local b = Instance.new("TextButton", qf); b.Size = UDim2.new(1,-8,0,22); b.Position = UDim2.new(0,4,0,24+(i-1)*24)
-        b.BackgroundColor3 = r[3]; b.Text = r[1]; b.TextColor3 = Color3.new(1,1,1); b.Font = Enum.Font.SourceSans; b.TextSize = 10
-        b.MouseButton1Click:Connect(function() UserRoles[player.Name] = r[2]; qm:Destroy() end)
-    end
-    local resetBtn = Instance.new("TextButton", qf); resetBtn.Size = UDim2.new(1,-8,0,22); resetBtn.Position = UDim2.new(0,4,0,96)
-    resetBtn.BackgroundColor3 = Color3.fromRGB(100,100,100); resetBtn.Text = "❌ XOA"; resetBtn.TextColor3 = Color3.new(1,1,1); resetBtn.Font = Enum.Font.SourceSans; resetBtn.TextSize = 10
-    resetBtn.MouseButton1Click:Connect(function() UserRoles[player.Name] = nil; qm:Destroy() end)
-    spawn(function() wait(10); if qm.Parent then qm:Destroy() end end)
-end
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        local mousePos = UserInputService:GetMouseLocation()
-        for _, p in pairs(Players:GetPlayers()) do
-            if p == LocalPlayer or not p.Character or not p.Character:FindFirstChild("Head") then continue end
-            local hp, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
-            if onScreen and (Vector2.new(hp.X, hp.Y) - mousePos).Magnitude < 80 then ShowRoleMenu(p, mousePos); break end
-        end
-    end
-end)
-
--- =====================================================================
 -- GUI
 -- =====================================================================
-local MainSG = Instance.new("ScreenGui", CoreGui); MainSG.Name = "MM2_Final"
+local MainSG = Instance.new("ScreenGui", CoreGui); MainSG.Name = "NV_Final"
 local MainFrame = Instance.new("Frame", MainSG)
-MainFrame.Size = UDim2.new(0, 200, 0, 300); MainFrame.Position = UDim2.new(0, 10, 0, 30)
+MainFrame.Size = UDim2.new(0, 200, 0, 310); MainFrame.Position = UDim2.new(0, 10, 0, 35)
 MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 18); MainFrame.BorderColor3 = Color3.fromRGB(255, 50, 50)
 MainFrame.BorderSizePixel = 2; MainFrame.Active = true; MainFrame.Draggable = true
 
 local TitleBar = Instance.new("Frame", MainFrame)
 TitleBar.Size = UDim2.new(1, 0, 0, 26); TitleBar.BackgroundColor3 = Color3.fromRGB(180, 20, 20)
 local Title = Instance.new("TextLabel", TitleBar)
-Title.Text = "MM2 KILLER FINDER"; Title.Size = UDim2.new(1, -55, 1, 0); Title.Position = UDim2.new(0, 8, 0, 0)
+Title.Text = "KE NGHI VAN"; Title.Size = UDim2.new(1, -55, 1, 0); Title.Position = UDim2.new(0, 8, 0, 0)
 Title.BackgroundTransparency = 1; Title.TextColor3 = Color3.new(1, 1, 1); Title.Font = Enum.Font.SourceSansBold; Title.TextSize = 10
 local MinBtn = Instance.new("TextButton", TitleBar)
 MinBtn.Size = UDim2.new(0, 22, 0, 22); MinBtn.Position = UDim2.new(1, -50, 0, 2); MinBtn.BackgroundColor3 = Color3.fromRGB(255, 150, 0)
@@ -245,86 +205,86 @@ CloseBtn.MouseButton1Click:Connect(function() MainSG:Destroy() end)
 local Content = Instance.new("Frame", MainFrame)
 Content.Size = UDim2.new(1, 0, 1, -26); Content.Position = UDim2.new(0, 0, 0, 26); Content.BackgroundTransparency = 1
 
--- Killer display
+-- Hiển thị Kẻ Giết
 local KillerFrame = Instance.new("Frame", Content)
-KillerFrame.Size = UDim2.new(1, -10, 0, 26); KillerFrame.Position = UDim2.new(0, 5, 0, 3)
+KillerFrame.Size = UDim2.new(1, -10, 0, 24); KillerFrame.Position = UDim2.new(0, 5, 0, 2)
 KillerFrame.BackgroundColor3 = Color3.fromRGB(50, 10, 10)
 local KillerLabel = Instance.new("TextLabel", KillerFrame)
 KillerLabel.Size = UDim2.new(1, 0, 1, 0); KillerLabel.BackgroundTransparency = 1
 KillerLabel.Text = "🔍 Dang tim Ke Giet..."; KillerLabel.TextColor3 = Color3.new(1, 1, 1); KillerLabel.Font = Enum.Font.SourceSansBold; KillerLabel.TextSize = 9
 
--- Buttons
-local yPos = 32
+local yPos = 30
 local buttons = {
-    {"👁 TANG HINH: TAT", Color3.fromRGB(100, 50, 200), function(b) ToggleInvis(); b.Text = S.INVIS and "👁 TANG HINH: BAT" or "👁 TANG HINH: TAT"; b.BackgroundColor3 = S.INVIS and Color3.fromRGB(0,180,0) or Color3.fromRGB(100,50,200) end},
     {"🛡 GOD: TAT", Color3.fromRGB(255, 215, 0), function(b) ToggleGod(); b.Text = S.GOD and "🛡 GOD: BAT" or "🛡 GOD: TAT"; b.BackgroundColor3 = S.GOD and Color3.fromRGB(0,180,0) or Color3.fromRGB(255,215,0) end},
     {"⚡ SPEED: TAT", Color3.fromRGB(200, 150, 0), function(b) ToggleSpeed(); b.Text = S.SPD and "⚡ SPEED: BAT" or "⚡ SPEED: TAT"; b.BackgroundColor3 = S.SPD and Color3.fromRGB(0,180,0) or Color3.fromRGB(200,150,0) end},
-    {"📍 TP KE GIET", Color3.fromRGB(200, 50, 50), function() if MurdererName then for _, p in pairs(Players:GetPlayers()) do if p.Name == MurdererName then TPTo(p); break end end end end},
+    {"🔴 TP DEN KE GIET", Color3.fromRGB(200, 50, 50), TPToMurderer},
+    {"📍 TP NGUOI GAN NHAT", Color3.fromRGB(200, 100, 50), TPToNearest},
     {"🎯 KEO NGAU NHIEN", Color3.fromRGB(255, 100, 0), PullRandom},
     {"🔧 FIX LAG", Color3.fromRGB(100, 100, 100), FixLag},
 }
 for _, data in pairs(buttons) do
     local btn = Instance.new("TextButton", Content)
-    btn.Size = UDim2.new(1, -10, 0, 24); btn.Position = UDim2.new(0, 5, 0, yPos); btn.BackgroundColor3 = data[2]; btn.Text = data[1]
+    btn.Size = UDim2.new(1, -10, 0, 26); btn.Position = UDim2.new(0, 5, 0, yPos); btn.BackgroundColor3 = data[2]; btn.Text = data[1]
     btn.TextColor3 = Color3.new(1, 1, 1); btn.Font = Enum.Font.SourceSansBold; btn.TextSize = 8
-    btn.MouseButton1Click:Connect(function() data[3](btn) end); yPos = yPos + 26
+    btn.MouseButton1Click:Connect(function() data[3](btn) end); yPos = yPos + 28
 end
 
--- Player list
 yPos = yPos + 5
 local PlayerLabel = Instance.new("TextLabel", Content)
 PlayerLabel.Size = UDim2.new(1, -10, 0, 14); PlayerLabel.Position = UDim2.new(0, 5, 0, yPos); PlayerLabel.BackgroundTransparency = 1
-PlayerLabel.Text = "👥 Click=TP | Chuot phai=Role"; PlayerLabel.TextColor3 = Color3.new(0.8, 0.8, 0.8); PlayerLabel.Font = Enum.Font.SourceSans; PlayerLabel.TextSize = 7
+PlayerLabel.Text = "👥 Click ten = TP den nguoi do"; PlayerLabel.TextColor3 = Color3.new(0.8, 0.8, 0.8); PlayerLabel.Font = Enum.Font.SourceSans; PlayerLabel.TextSize = 7
 yPos = yPos + 16
 
 local ScrollFrame = Instance.new("ScrollingFrame", Content)
 ScrollFrame.Size = UDim2.new(1, -10, 1, -yPos - 5); ScrollFrame.Position = UDim2.new(0, 5, 0, yPos)
-ScrollFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 18); ScrollFrame.BorderSizePixel = 0; ScrollFrame.ScrollBarThickness = 4; ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22); ScrollFrame.BorderSizePixel = 0; ScrollFrame.ScrollBarThickness = 4; ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 local UIList = Instance.new("UIListLayout", ScrollFrame); UIList.Padding = UDim.new(0, 2)
 
 function RefreshList()
+    -- Cập nhật hiển thị Kẻ Giết
     local murderer = FindMurderer()
     if murderer then
-        KillerLabel.Text = "🔴 KE GIET: " .. murderer.Name; KillerFrame.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
+        KillerLabel.Text = "🔴 KE GIET: " .. murderer.Name
+        KillerFrame.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
     else
-        KillerLabel.Text = "🟡 Chua tim thay Ke Giet"; KillerFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 10)
+        KillerLabel.Text = "🟡 Chua tim thay Ke Giet"
+        KillerFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 10)
     end
-    pcall(function()
-        for _, c in pairs(ScrollFrame:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
-        local all = Players:GetPlayers(); table.sort(all, function(a,b) return a.Name < b.Name end)
-        local count = 0
-        for _, p in pairs(all) do
-            if p ~= LocalPlayer then
-                count = count + 1
-                local role = GetRole(p)
-                local color = role == "MURDERER" and Color3.fromRGB(200, 50, 50) or (role == "SHERIFF" and Color3.fromRGB(50, 100, 200) or Color3.fromRGB(50, 180, 50))
-                local tag = role == "MURDERER" and "🔴" or (role == "SHERIFF" and "🔵" or "🟢")
-                local pf = Instance.new("Frame", ScrollFrame); pf.Size = UDim2.new(1, -2, 0, 22); pf.BackgroundColor3 = color
-                local btn = Instance.new("TextButton", pf); btn.Size = UDim2.new(1, 0, 1, 0); btn.BackgroundTransparency = 0.7; btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-                btn.Text = tag .. " " .. p.Name; btn.TextColor3 = Color3.new(1, 1, 1); btn.Font = Enum.Font.SourceSans; btn.TextSize = 9
-                btn.MouseButton1Click:Connect(function() TPTo(p) end)
-                btn.MouseButton2Click:Connect(function() ShowRoleMenu(p, UserInputService:GetMouseLocation()) end)
-            end
+    
+    -- Danh sách người chơi
+    for _, c in pairs(ScrollFrame:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
+    local all = Players:GetPlayers(); table.sort(all, function(a,b) return a.Name < b.Name end)
+    local count = 0
+    for _, p in pairs(all) do
+        if p ~= LocalPlayer then
+            count = count + 1
+            local pf = Instance.new("Frame", ScrollFrame)
+            pf.Size = UDim2.new(1, -2, 0, 22); pf.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
+            local btn = Instance.new("TextButton", pf)
+            btn.Size = UDim2.new(1, 0, 1, 0); btn.BackgroundTransparency = 0.7; btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            btn.Text = "🔴 " .. p.Name; btn.TextColor3 = Color3.new(1, 1, 1); btn.Font = Enum.Font.SourceSans; btn.TextSize = 9
+            btn.MouseButton1Click:Connect(function() TPTo(p) end)
         end
-        ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, count * 24)
-    end)
+    end
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, count * 24)
 end
 
 local RefreshBtn = Instance.new("TextButton", Content)
-RefreshBtn.Size = UDim2.new(1, -10, 0, 18); RefreshBtn.Position = UDim2.new(0, 5, 1, -20); RefreshBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-RefreshBtn.Text = "REFRESH"; RefreshBtn.TextColor3 = Color3.new(1, 1, 1); RefreshBtn.Font = Enum.Font.SourceSansBold; RefreshBtn.TextSize = 7
+RefreshBtn.Size = UDim2.new(1, -10, 0, 18); RefreshBtn.Position = UDim2.new(0, 5, 1, -20)
+RefreshBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55); RefreshBtn.Text = "REFRESH"
+RefreshBtn.TextColor3 = Color3.new(1, 1, 1); RefreshBtn.Font = Enum.Font.SourceSansBold; RefreshBtn.TextSize = 7
 RefreshBtn.MouseButton1Click:Connect(RefreshList)
 
 -- Mini menu
-local MiniSG = Instance.new("ScreenGui", CoreGui); MiniSG.Name = "MM2_Mini"
+local MiniSG = Instance.new("ScreenGui", CoreGui); MiniSG.Name = "NV_Mini"
 local MiniFrame = Instance.new("Frame", MiniSG)
-MiniFrame.Size = UDim2.new(0, 200, 0, 30); MiniFrame.Position = UDim2.new(0, 10, 0, 30)
+MiniFrame.Size = UDim2.new(0, 200, 0, 30); MiniFrame.Position = UDim2.new(0, 10, 0, 35)
 MiniFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 18); MiniFrame.BorderColor3 = Color3.fromRGB(255, 150, 0)
 MiniFrame.BorderSizePixel = 2; MiniFrame.Active = true; MiniFrame.Draggable = true; MiniFrame.Visible = false
 local MiniBar = Instance.new("Frame", MiniFrame)
 MiniBar.Size = UDim2.new(1, 0, 1, 0); MiniBar.BackgroundColor3 = Color3.fromRGB(180, 20, 20)
 local MiniTitle = Instance.new("TextLabel", MiniBar)
-MiniTitle.Text = "MM2 [THU GON]"; MiniTitle.Size = UDim2.new(1, -55, 1, 0); MiniTitle.Position = UDim2.new(0, 5, 0, 0)
+MiniTitle.Text = "KE NGHI VAN [THU GON]"; MiniTitle.Size = UDim2.new(1, -55, 1, 0); MiniTitle.Position = UDim2.new(0, 5, 0, 0)
 MiniTitle.BackgroundTransparency = 1; MiniTitle.TextColor3 = Color3.new(1, 1, 1); MiniTitle.Font = Enum.Font.SourceSansBold; MiniTitle.TextSize = 9
 local ExpandBtn = Instance.new("TextButton", MiniBar)
 ExpandBtn.Size = UDim2.new(0, 22, 0, 22); ExpandBtn.Position = UDim2.new(1, -50, 0, 4); ExpandBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
@@ -336,16 +296,10 @@ MiniClose.MouseButton1Click:Connect(function() MainSG:Destroy(); MiniSG:Destroy(
 MinBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false; MiniFrame.Position = MainFrame.Position; MiniFrame.Visible = true end)
 ExpandBtn.MouseButton1Click:Connect(function() MiniFrame.Visible = false; MainFrame.Position = MiniFrame.Position; MainFrame.Visible = true; RefreshList() end)
 
--- =====================================================================
 -- START
--- =====================================================================
 RunService.RenderStepped:Connect(UpdateESP)
 RefreshList()
 Players.PlayerAdded:Connect(function() wait(0.5); RefreshList() end)
-Players.PlayerRemoving:Connect(function(p)
-    if highlights[p.Name] then pcall(function() highlights[p.Name]:Destroy() end); highlights[p.Name] = nil end
-    if MurdererName == p.Name then MurdererName = nil end
-    UserRoles[p.Name] = nil; wait(0.3); RefreshList()
-end)
-spawn(function() while MainSG and MainSG.Parent do wait(5); pcall(function() FindMurderer() end); pcall(RefreshList) end end)
-StarterGui:SetCore("SendNotification", {Title = "MM2 KILLER FINDER", Text = "Dang tim Ke Giet... | Click = TP | Chuot phai = Role", Duration = 5})
+Players.PlayerRemoving:Connect(function(p) if circles[p.Name] then pcall(function() circles[p.Name]:Remove() end); circles[p.Name] = nil end; if texts[p.Name] then pcall(function() texts[p.Name]:Remove() end); texts[p.Name] = nil end; wait(0.3); RefreshList() end)
+
+StarterGui:SetCore("SendNotification", {Title = "KE NGHI VAN", Text = "ESP Do + God + Speed + TP Ke Giet + Keo + Fix Lag", Duration = 4})
