@@ -1,8 +1,8 @@
 -- =====================================================================
--- MM2 KILLER FINDER - HOÀN CHỈNH - COPY LÀ CHẠY
+-- MM2 KILLER FINDER - HOÀN CHỈNH - COPY TOÀN BỘ
 -- =====================================================================
--- Dùng cho: Xeno, Delta X, KRNL, Fluxus
--- Chức năng: Tự động tìm Kẻ Giết, ESP màu, TP, God, Speed, Tàng hình
+-- Dùng cho: Delta X, Xeno, KRNL, Fluxus
+-- Cách dùng: Ctrl+A -> Ctrl+C -> Vào Executor -> Ctrl+V -> Execute
 -- =====================================================================
 
 local Players = game:GetService("Players")
@@ -15,6 +15,7 @@ local StarterGui = game:GetService("StarterGui")
 local Lighting = game:GetService("Lighting")
 local UserInputService = game:GetService("UserInputService")
 
+-- Xóa GUI cũ
 pcall(function()
     for _, n in pairs({"MM2_Final", "MM2_Mini", "RoleMenu"}) do
         if CoreGui:FindFirstChild(n) then CoreGui:FindFirstChild(n):Destroy() end
@@ -26,7 +27,7 @@ local UserRoles = {}
 local MurdererName = nil
 
 -- =====================================================================
--- TÌM KẺ GIẾT
+-- TÌM KẺ GIẾT (DAO = KẺ GIẾT)
 -- =====================================================================
 local function FindMurderer()
     for _, p in pairs(Players:GetPlayers()) do
