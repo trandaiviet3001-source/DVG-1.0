@@ -1,571 +1,350 @@
---[[
-  ROBLOX MM2 VIP PRO - FIX TOÀN BỘ LỖI
-  Tương thích Xeno & Delta, tối ưu hoàn toàn, không lỗi
-]]
+-- =====================================================================
+-- MM2 KILLER FINDER - HOÀN CHỈNH - COPY LÀ CHẠY
+-- =====================================================================
+-- Dùng cho: Xeno, Delta X, KRNL, Fluxus
+-- Chức năng: Tự động tìm Kẻ Giết, ESP màu, TP, God, Speed, Tàng hình
+-- =====================================================================
 
-local player = game.Players.LocalPlayer
-local workspace = game.Workspace
-local runService = game:GetService("RunService")
-local players = game.Players
-local camera = workspace.CurrentCamera
-local guiService = game:GetService("GuiService")
-local userInput = game:GetService("UserInputService")
-local teleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local CoreGui = game:GetService("CoreGui")
+local Workspace = game:GetService("Workspace")
+local StarterGui = game:GetService("StarterGui")
+local Lighting = game:GetService("Lighting")
+local UserInputService = game:GetService("UserInputService")
 
--- Kiểm tra executor an toàn
-local isXeno = pcall(function() return syn and syn.crypt end) and true or false
-local isDelta = pcall(function() return isfolder and isfolder("delta") end) and true or false
-local executorName = isXeno and "XENO" or (isDelta and "DELTA" or "UNKNOWN")
+pcall(function()
+    for _, n in pairs({"MM2_Final", "MM2_Mini", "RoleMenu"}) do
+        if CoreGui:FindFirstChild(n) then CoreGui:FindFirstChild(n):Destroy() end
+    end
+end)
 
--- Debug library an toàn
-local debugLib = debug or getdebug or {}
-local getgc = debugLib.getgc or function() return {} end
-local getreg = debugLib.getreg or function() return {} end
-local hookfunction = debugLib.hookfunction or function(f, h) return h end
-local getrawmetatable = debugLib.getrawmetatable or function() return nil end
-local setreadonly = debugLib.setreadonly or function() end
+local S = {ESP = true, GOD = false, SPD = false, INVIS = false}
+local UserRoles = {}
+local MurdererName = nil
 
--- Trạng thái
-local flags = {
-    esp = false,
-    invisible = false,
-    noclip = false,
-    godmode = false,
-    speed = false,
-    fixLag = true,
-    autoUpdate = true,
-    teleportAllInnocent = false,
-    teleportMurderer = false
-}
-
-local speedValue = 16
-local espCache = {}
-local lastUpdate = 0
-local updateInterval = 0.15
-local isAlive = false
-local character = nil
-local humanoid = nil
-
--- Hàm lấy character an toàn
-local function getCharacter()
-    if player and player.Character then
-        return player.Character
+-- =====================================================================
+-- TÌM KẺ GIẾT
+-- =====================================================================
+local function FindMurderer()
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            if p.Character then
+                for _, v in pairs(p.Character:GetChildren()) do
+                    if v:IsA("Tool") then
+                        local tn = v.Name:lower()
+                        if tn:find("knife") or tn:find("dao") or tn:find("sword") or tn:find("blade") or tn:find("dagger") or tn:find("kill") then
+                            MurdererName = p.Name; return p
+                        end
+                    end
+                end
+            end
+            if p.Backpack then
+                for _, v in pairs(p.Backpack:GetChildren()) do
+                    if v:IsA("Tool") then
+                        local tn = v.Name:lower()
+                        if tn:find("knife") or tn:find("dao") then MurdererName = p.Name; return p end
+                    end
+                end
+            end
+        end
     end
     return nil
 end
 
-local function getHumanoid()
-    local char = getCharacter()
-    if char then
-        return char:FindFirstChild("Humanoid")
-    end
-    return nil
-end
-
--- Hàm getRoles an toàn (fix lỗi nil)
-local function getRoles()
-    local murderers, polices, innocents = {}, {}, {}
-    local allPlayers = players:GetPlayers()
-    if not allPlayers or #allPlayers == 0 then return murderers, polices, innocents end
-    
-    for _, v in pairs(allPlayers) do
-        if v and v ~= player then
-            local char = v.Character
-            if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart") then
-                local isMurderer, isPolice = false, false
-                -- Kiểm tra tool an toàn
-                local tools = char:GetChildren()
-                for _, tool in pairs(tools) do
-                    if tool and tool:IsA("Tool") then
-                        local name = string.lower(tool.Name or "")
-                        if string.find(name, "knife") or string.find(name, "sword") or string.find(name, "blade") or string.find(name, "dagger") then
-                            isMurderer = true
-                        elseif string.find(name, "gun") or string.find(name, "pistol") or string.find(name, "revolver") or string.find(name, "sheriff") then
-                            isPolice = true
-                        end
-                    end
-                end
-                -- Fallback attribute an toàn
-                if not isMurderer then
-                    local attr = pcall(function() return v:GetAttribute("Murderer") end)
-                    if attr and attr then isMurderer = true end
-                end
-                if not isPolice then
-                    local attr = pcall(function() return v:GetAttribute("Police") end)
-                    if attr and attr then isPolice = true end
-                end
-                
-                if isMurderer then table.insert(murderers, v)
-                elseif isPolice then table.insert(polices, v)
-                else table.insert(innocents, v) end
+-- =====================================================================
+-- VAI TRÒ
+-- =====================================================================
+local function GetRole(player)
+    if UserRoles[player.Name] then return UserRoles[player.Name] end
+    if MurdererName and player.Name == MurdererName then return "MURDERER" end
+    if player.Character then
+        for _, v in pairs(player.Character:GetChildren()) do
+            if v:IsA("Tool") then
+                local tn = v.Name:lower()
+                if tn:find("gun") or tn:find("súng") or tn:find("pistol") then return "SHERIFF"
+                elseif tn:find("knife") or tn:find("dao") then return "MURDERER" end
             end
         end
     end
-    return murderers, polices, innocents
+    if player.Team then
+        local tn = player.Team.Name:lower()
+        if tn:find("murder") or tn:find("kill") then return "MURDERER"
+        elseif tn:find("sheriff") or tn:find("police") then return "SHERIFF"
+        elseif tn:find("innocent") then return "INNOCENT" end
+    end
+    return "INNOCENT"
 end
 
--- ESP fix lỗi BillboardGui
-local function updateESP()
-    if not flags.esp then
-        for _, gui in pairs(espCache) do
-            if gui and gui.Parent then
-                pcall(function() gui.Enabled = false end)
+-- =====================================================================
+-- MÀU
+-- =====================================================================
+local function GetColor(role)
+    if role == "MURDERER" then return Color3.new(1, 0, 0)
+    elseif role == "SHERIFF" then return Color3.new(0.1, 0.4, 1)
+    else return Color3.new(0, 1, 0) end
+end
+local function GetTag(role)
+    if role == "MURDERER" then return "KE GIET"
+    elseif role == "SHERIFF" then return "CANH SAT"
+    else return "VO TOI" end
+end
+
+-- =====================================================================
+-- ESP HIGHLIGHT
+-- =====================================================================
+local highlights = {}
+local function UpdateESP()
+    pcall(function()
+        for _, player in pairs(Players:GetPlayers()) do
+            if player == LocalPlayer then goto continue end
+            if not player.Character then
+                if highlights[player.Name] then pcall(function() highlights[player.Name]:Destroy() end); highlights[player.Name] = nil end
+                goto continue
             end
-        end
-        return
-    end
-    
-    local murderers, polices, innocents = getRoles()
-    local allPlayers = players:GetPlayers()
-    
-    for _, v in pairs(allPlayers) do
-        if v and v ~= player then
-            local char = v.Character
-            if char then
-                local head = char:FindFirstChild("Head")
-                if head then
-                    local esp = espCache[v]
-                    if not esp then
-                        esp = Instance.new("BillboardGui")
-                        esp.Name = "ESP_" .. v.Name
-                        esp.Adornee = head
-                        esp.Size = UDim2.new(0, 160, 0, 32)
-                        esp.AlwaysOnTop = true
-                        esp.StudsOffset = Vector3.new(0, 2.5, 0)
-                        esp.MaxDistance = 1000
-                        local label = Instance.new("TextLabel", esp)
-                        label.Size = UDim2.new(1,0,1,0)
-                        label.BackgroundTransparency = 1
-                        label.TextScaled = true
-                        label.Font = Enum.Font.GothamBold
-                        label.TextStrokeTransparency = 0.2
-                        label.TextColor3 = Color3.new(1,1,1)
-                        esp.Parent = char
-                        espCache[v] = esp
-                    else
-                        esp.Adornee = head
-                        esp.Parent = char
-                    end
-                    esp.Enabled = true
-                    local label = esp:FindFirstChild("TextLabel")
-                    if label then
-                        label.Text = v.Name
-                        if table.find(murderers, v) then
-                            label.TextColor3 = Color3.new(1,0,0)
-                            label.TextStrokeColor3 = Color3.new(0.4,0,0)
-                        elseif table.find(polices, v) then
-                            label.TextColor3 = Color3.new(0.2,0.5,1)
-                            label.TextStrokeColor3 = Color3.new(0,0,0.5)
-                        else
-                            label.TextColor3 = Color3.new(0,1,0)
-                            label.TextStrokeColor3 = Color3.new(0,0.4,0)
-                        end
-                    end
+            if S.ESP then
+                if not highlights[player.Name] then
+                    local h = Instance.new("Highlight")
+                    h.FillTransparency = 0.8; h.OutlineTransparency = 0
+                    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    h.Parent = player.Character; highlights[player.Name] = h
                 end
+                local role = GetRole(player); local color = GetColor(role)
+                highlights[player.Name].FillColor = color; highlights[player.Name].OutlineColor = color
             else
-                if espCache[v] then
-                    pcall(function() espCache[v]:Destroy() end)
-                    espCache[v] = nil
-                end
+                if highlights[player.Name] then pcall(function() highlights[player.Name]:Destroy() end); highlights[player.Name] = nil end
             end
+            ::continue::
         end
-    end
-end
-
--- Teleport an toàn (fix lỗi CFrame)
-local function teleportTo(target)
-    if not target or not target.Character then return false end
-    local hrp = target.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-    local myChar = getCharacter()
-    if not myChar then return false end
-    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return false end
-    pcall(function()
-        myHrp.CFrame = hrp.CFrame + Vector3.new(0, 2.5, 0)
-    end)
-    return true
-end
-
-local function teleportAllInnocentToMe()
-    local _, _, innocents = getRoles()
-    local myChar = getCharacter()
-    if not myChar then return end
-    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return end
-    for _, v in pairs(innocents) do
-        if v and v.Character then
-            local hrp = v.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                pcall(function()
-                    hrp.CFrame = myHrp.CFrame + Vector3.new(math.random(-5,5), 2, math.random(-5,5))
-                end)
-            end
+        for name, h in pairs(highlights) do
+            if not Players:FindFirstChild(name) then pcall(function() h:Destroy() end); highlights[name] = nil end
         end
-    end
-end
-
-local function teleportMurdererToMe()
-    local murderers, _, _ = getRoles()
-    if not murderers or #murderers == 0 then return end
-    local target = murderers[1]
-    if not target or not target.Character then return end
-    local hrp = target.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    local myChar = getCharacter()
-    if not myChar then return end
-    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return end
-    pcall(function()
-        hrp.CFrame = myHrp.CFrame + Vector3.new(0, 2, 3)
     end)
 end
 
--- Invisible fix lỗi phần
-local function setInvisible(state)
-    local char = getCharacter()
-    if not char then return end
-    local parts = char:GetDescendants()
-    for _, part in pairs(parts) do
-        if part:IsA("BasePart") then
-            pcall(function()
-                part.Transparency = state and 1 or 0
-                if state then
-                    part.CanCollide = false
-                else
-                    part.CanCollide = true
-                end
-            end)
-        end
-    end
-    -- Ẩn accessories
-    local accessories = char:GetChildren()
-    for _, acc in pairs(accessories) do
-        if acc:IsA("Accessory") then
-            local handle = acc:FindFirstChild("Handle")
-            if handle and handle:IsA("BasePart") then
-                pcall(function()
-                    handle.Transparency = state and 1 or 0
-                end)
-            end
-        end
-    end
+-- =====================================================================
+-- CHỨC NĂNG
+-- =====================================================================
+local function ToggleGod()
+    S.GOD = not S.GOD
+    if S.GOD then spawn(function() while S.GOD do pcall(function() if LocalPlayer.Character then local h = LocalPlayer.Character:FindFirstChild("Humanoid"); if h then h.Health = h.MaxHealth end end end); wait(0.05) end end) end
 end
-
--- Noclip fix lỗi cache
-local noclipCache = {}
-local function setNoclip(state)
-    local char = getCharacter()
-    if not char then return end
-    if state then
-        local parts = char:GetDescendants()
-        for _, part in pairs(parts) do
-            if part:IsA("BasePart") then
-                pcall(function()
-                    part.CanCollide = false
-                    noclipCache[part] = true
-                end)
-            end
-        end
-    else
-        for part in pairs(noclipCache) do
-            if part and part.Parent then
-                pcall(function() part.CanCollide = true end)
-            end
-        end
-        noclipCache = {}
-    end
+local function ToggleSpeed()
+    S.SPD = not S.SPD
+    pcall(function() if LocalPlayer.Character then local h = LocalPlayer.Character:FindFirstChild("Humanoid"); if h then h.WalkSpeed = S.SPD and 50 or 16 end end end)
 end
-
--- Godmode fix lỗi hook
-local godmodeHook = nil
-local function setGodmode(state)
-    local hum = getHumanoid()
-    if not hum then return end
-    if state then
-        pcall(function()
-            hum.MaxHealth = 1e9
-            hum.Health = 1e9
-            if not godmodeHook then
-                local oldTake = hum.TakeDamage
-                hum.TakeDamage = function(self, amount)
-                    if flags.godmode then
-                        return nil
-                    else
-                        return oldTake and oldTake(self, amount) or nil
+local function ToggleInvis()
+    S.INVIS = not S.INVIS
+    if S.INVIS then
+        spawn(function()
+            while S.INVIS and LocalPlayer.Character do
+                pcall(function()
+                    for _, part in pairs(LocalPlayer.Character:GetChildren()) do
+                        if part:IsA("BasePart") then part.Transparency = 1; part.CanCollide = false
+                        elseif part:IsA("Decal") then part.Transparency = 1 end
                     end
-                end
-                godmodeHook = true
-            end
-        end)
-    else
-        pcall(function()
-            hum.MaxHealth = 100
-            hum.Health = 100
-            if godmodeHook then
-                hum.TakeDamage = nil
-                godmodeHook = false
+                    local head = LocalPlayer.Character:FindFirstChild("Head"); if head then head.Transparency = 1 end
+                    local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+                    if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None; hum.NameDisplayDistance = 0; hum.HealthDisplayDistance = 0 end
+                end)
+                wait(0.1)
             end
         end)
     end
 end
-
--- Speed fix lỗi
-local function setSpeed(mult)
-    local hum = getHumanoid()
-    if hum then
-        pcall(function()
-            hum.WalkSpeed = mult
-        end)
+local function TPTo(player)
+    if not player or not player.Character then return end
+    local root = player.Character:FindFirstChild("HumanoidRootPart"); if not root then return end
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
+    LocalPlayer.Character.HumanoidRootPart.CFrame = root.CFrame + Vector3.new(0, 2, 0)
+end
+local function PullRandom()
+    local targets = {}
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then table.insert(targets, p) end
+    end
+    if #targets > 0 then
+        local target = targets[math.random(1, #targets)]
+        pcall(function() target.Character.HumanoidRootPart.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 0, 2) end)
+        StarterGui:SetCore("SendNotification", {Title = "KEO NGUOI", Text = "Da keo " .. target.Name, Duration = 2})
     end
 end
-
--- Fix Lag an toàn
-local function setFixLag(state)
+local function FixLag()
     pcall(function()
-        if state then
-            settings().Rendering.QualityLevel = 1
-            settings().Rendering.AutoFRMLevel = true
-            runService:SetThrottleFpsEnabled(true)
-            if camera then
-                camera.FieldOfView = 70
-            end
-            -- Tắt hiệu ứng an toàn
-            local allDesc = workspace:GetDescendants()
-            for _, v in pairs(allDesc) do
-                if v and v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or 
-                   v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then
-                    pcall(function() v.Enabled = false end)
-                end
-                if v and v:IsA("Shadow") then
-                    pcall(function() v.Enabled = false end)
-                end
-            end
-        else
-            settings().Rendering.QualityLevel = 10
-            runService:SetThrottleFpsEnabled(false)
-            if camera then
-                camera.FieldOfView = 90
-            end
+        Lighting.GlobalShadows = false; Lighting.FogEnd = 9999999; Lighting.Brightness = 2
+        settings().Rendering.QualityLevel = 1
+        for _, v in pairs(Workspace:GetDescendants()) do
+            if v:IsA("ParticleEmitter") or v:IsA("Smoke") or v:IsA("Fire") then v.Enabled = false end
         end
     end)
 end
 
--- Vòng lặp chính fix lỗi
-runService.Heartbeat:Connect(function()
-    local now = tick()
-    if now - lastUpdate < updateInterval then return end
-    lastUpdate = now
-    
-    -- Cập nhật character
-    character = getCharacter()
-    humanoid = getHumanoid()
-    
-    -- ESP
-    if flags.esp then
-        pcall(updateESP)
+-- =====================================================================
+-- MENU GÁN VAI TRÒ
+-- =====================================================================
+local function ShowRoleMenu(player, position)
+    if CoreGui:FindFirstChild("RoleMenu") then CoreGui:FindFirstChild("RoleMenu"):Destroy() end
+    local qm = Instance.new("ScreenGui", CoreGui); qm.Name = "RoleMenu"
+    local qf = Instance.new("Frame", qm); qf.Size = UDim2.new(0, 150, 0, 120); qf.Position = UDim2.new(0, position.X, 0, position.Y)
+    qf.BackgroundColor3 = Color3.fromRGB(10,10,15); qf.BorderColor3 = Color3.fromRGB(255,255,255); qf.BorderSizePixel = 1
+    local role = GetRole(player)
+    local qt = Instance.new("TextLabel", qf); qt.Size = UDim2.new(1,0,0,22); qt.BackgroundColor3 = GetColor(role)
+    qt.Text = player.Name .. " - " .. GetTag(role); qt.TextColor3 = Color3.new(1,1,1); qt.Font = Enum.Font.SourceSansBold; qt.TextSize = 10
+    local roles = {
+        {"🔴 KE GIET", "MURDERER", Color3.fromRGB(200, 30, 30)},
+        {"🔵 CANH SAT", "SHERIFF", Color3.fromRGB(30, 60, 200)},
+        {"🟢 VO TOI", "INNOCENT", Color3.fromRGB(30, 180, 30)},
+    }
+    for i, r in pairs(roles) do
+        local b = Instance.new("TextButton", qf); b.Size = UDim2.new(1,-8,0,22); b.Position = UDim2.new(0,4,0,24+(i-1)*24)
+        b.BackgroundColor3 = r[3]; b.Text = r[1]; b.TextColor3 = Color3.new(1,1,1); b.Font = Enum.Font.SourceSans; b.TextSize = 10
+        b.MouseButton1Click:Connect(function() UserRoles[player.Name] = r[2]; qm:Destroy() end)
+    end
+    local resetBtn = Instance.new("TextButton", qf); resetBtn.Size = UDim2.new(1,-8,0,22); resetBtn.Position = UDim2.new(0,4,0,96)
+    resetBtn.BackgroundColor3 = Color3.fromRGB(100,100,100); resetBtn.Text = "❌ XOA"; resetBtn.TextColor3 = Color3.new(1,1,1); resetBtn.Font = Enum.Font.SourceSans; resetBtn.TextSize = 10
+    resetBtn.MouseButton1Click:Connect(function() UserRoles[player.Name] = nil; qm:Destroy() end)
+    spawn(function() wait(10); if qm.Parent then qm:Destroy() end end)
+end
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        local mousePos = UserInputService:GetMouseLocation()
+        for _, p in pairs(Players:GetPlayers()) do
+            if p == LocalPlayer or not p.Character or not p.Character:FindFirstChild("Head") then continue end
+            local hp, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
+            if onScreen and (Vector2.new(hp.X, hp.Y) - mousePos).Magnitude < 80 then ShowRoleMenu(p, mousePos); break end
+        end
+    end
+end)
+
+-- =====================================================================
+-- GUI
+-- =====================================================================
+local MainSG = Instance.new("ScreenGui", CoreGui); MainSG.Name = "MM2_Final"
+local MainFrame = Instance.new("Frame", MainSG)
+MainFrame.Size = UDim2.new(0, 200, 0, 300); MainFrame.Position = UDim2.new(0, 10, 0, 30)
+MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 18); MainFrame.BorderColor3 = Color3.fromRGB(255, 50, 50)
+MainFrame.BorderSizePixel = 2; MainFrame.Active = true; MainFrame.Draggable = true
+
+local TitleBar = Instance.new("Frame", MainFrame)
+TitleBar.Size = UDim2.new(1, 0, 0, 26); TitleBar.BackgroundColor3 = Color3.fromRGB(180, 20, 20)
+local Title = Instance.new("TextLabel", TitleBar)
+Title.Text = "MM2 KILLER FINDER"; Title.Size = UDim2.new(1, -55, 1, 0); Title.Position = UDim2.new(0, 8, 0, 0)
+Title.BackgroundTransparency = 1; Title.TextColor3 = Color3.new(1, 1, 1); Title.Font = Enum.Font.SourceSansBold; Title.TextSize = 10
+local MinBtn = Instance.new("TextButton", TitleBar)
+MinBtn.Size = UDim2.new(0, 22, 0, 22); MinBtn.Position = UDim2.new(1, -50, 0, 2); MinBtn.BackgroundColor3 = Color3.fromRGB(255, 150, 0)
+MinBtn.Text = "−"; MinBtn.TextColor3 = Color3.new(1, 1, 1); MinBtn.Font = Enum.Font.SourceSansBold; MinBtn.TextSize = 14
+local CloseBtn = Instance.new("TextButton", TitleBar)
+CloseBtn.Size = UDim2.new(0, 22, 0, 22); CloseBtn.Position = UDim2.new(1, -26, 0, 2); CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+CloseBtn.Text = "✕"; CloseBtn.TextColor3 = Color3.new(1, 1, 1); CloseBtn.Font = Enum.Font.SourceSansBold; CloseBtn.TextSize = 12
+CloseBtn.MouseButton1Click:Connect(function() MainSG:Destroy() end)
+
+local Content = Instance.new("Frame", MainFrame)
+Content.Size = UDim2.new(1, 0, 1, -26); Content.Position = UDim2.new(0, 0, 0, 26); Content.BackgroundTransparency = 1
+
+-- Killer display
+local KillerFrame = Instance.new("Frame", Content)
+KillerFrame.Size = UDim2.new(1, -10, 0, 26); KillerFrame.Position = UDim2.new(0, 5, 0, 3)
+KillerFrame.BackgroundColor3 = Color3.fromRGB(50, 10, 10)
+local KillerLabel = Instance.new("TextLabel", KillerFrame)
+KillerLabel.Size = UDim2.new(1, 0, 1, 0); KillerLabel.BackgroundTransparency = 1
+KillerLabel.Text = "🔍 Dang tim Ke Giet..."; KillerLabel.TextColor3 = Color3.new(1, 1, 1); KillerLabel.Font = Enum.Font.SourceSansBold; KillerLabel.TextSize = 9
+
+-- Buttons
+local yPos = 32
+local buttons = {
+    {"👁 TANG HINH: TAT", Color3.fromRGB(100, 50, 200), function(b) ToggleInvis(); b.Text = S.INVIS and "👁 TANG HINH: BAT" or "👁 TANG HINH: TAT"; b.BackgroundColor3 = S.INVIS and Color3.fromRGB(0,180,0) or Color3.fromRGB(100,50,200) end},
+    {"🛡 GOD: TAT", Color3.fromRGB(255, 215, 0), function(b) ToggleGod(); b.Text = S.GOD and "🛡 GOD: BAT" or "🛡 GOD: TAT"; b.BackgroundColor3 = S.GOD and Color3.fromRGB(0,180,0) or Color3.fromRGB(255,215,0) end},
+    {"⚡ SPEED: TAT", Color3.fromRGB(200, 150, 0), function(b) ToggleSpeed(); b.Text = S.SPD and "⚡ SPEED: BAT" or "⚡ SPEED: TAT"; b.BackgroundColor3 = S.SPD and Color3.fromRGB(0,180,0) or Color3.fromRGB(200,150,0) end},
+    {"📍 TP KE GIET", Color3.fromRGB(200, 50, 50), function() if MurdererName then for _, p in pairs(Players:GetPlayers()) do if p.Name == MurdererName then TPTo(p); break end end end end},
+    {"🎯 KEO NGAU NHIEN", Color3.fromRGB(255, 100, 0), PullRandom},
+    {"🔧 FIX LAG", Color3.fromRGB(100, 100, 100), FixLag},
+}
+for _, data in pairs(buttons) do
+    local btn = Instance.new("TextButton", Content)
+    btn.Size = UDim2.new(1, -10, 0, 24); btn.Position = UDim2.new(0, 5, 0, yPos); btn.BackgroundColor3 = data[2]; btn.Text = data[1]
+    btn.TextColor3 = Color3.new(1, 1, 1); btn.Font = Enum.Font.SourceSansBold; btn.TextSize = 8
+    btn.MouseButton1Click:Connect(function() data[3](btn) end); yPos = yPos + 26
+end
+
+-- Player list
+yPos = yPos + 5
+local PlayerLabel = Instance.new("TextLabel", Content)
+PlayerLabel.Size = UDim2.new(1, -10, 0, 14); PlayerLabel.Position = UDim2.new(0, 5, 0, yPos); PlayerLabel.BackgroundTransparency = 1
+PlayerLabel.Text = "👥 Click=TP | Chuot phai=Role"; PlayerLabel.TextColor3 = Color3.new(0.8, 0.8, 0.8); PlayerLabel.Font = Enum.Font.SourceSans; PlayerLabel.TextSize = 7
+yPos = yPos + 16
+
+local ScrollFrame = Instance.new("ScrollingFrame", Content)
+ScrollFrame.Size = UDim2.new(1, -10, 1, -yPos - 5); ScrollFrame.Position = UDim2.new(0, 5, 0, yPos)
+ScrollFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 18); ScrollFrame.BorderSizePixel = 0; ScrollFrame.ScrollBarThickness = 4; ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+local UIList = Instance.new("UIListLayout", ScrollFrame); UIList.Padding = UDim.new(0, 2)
+
+function RefreshList()
+    local murderer = FindMurderer()
+    if murderer then
+        KillerLabel.Text = "🔴 KE GIET: " .. murderer.Name; KillerFrame.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
     else
-        for _, gui in pairs(espCache) do
-            if gui and gui.Parent then
-                pcall(function() gui.Enabled = false end)
+        KillerLabel.Text = "🟡 Chua tim thay Ke Giet"; KillerFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 10)
+    end
+    pcall(function()
+        for _, c in pairs(ScrollFrame:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
+        local all = Players:GetPlayers(); table.sort(all, function(a,b) return a.Name < b.Name end)
+        local count = 0
+        for _, p in pairs(all) do
+            if p ~= LocalPlayer then
+                count = count + 1
+                local role = GetRole(p)
+                local color = role == "MURDERER" and Color3.fromRGB(200, 50, 50) or (role == "SHERIFF" and Color3.fromRGB(50, 100, 200) or Color3.fromRGB(50, 180, 50))
+                local tag = role == "MURDERER" and "🔴" or (role == "SHERIFF" and "🔵" or "🟢")
+                local pf = Instance.new("Frame", ScrollFrame); pf.Size = UDim2.new(1, -2, 0, 22); pf.BackgroundColor3 = color
+                local btn = Instance.new("TextButton", pf); btn.Size = UDim2.new(1, 0, 1, 0); btn.BackgroundTransparency = 0.7; btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+                btn.Text = tag .. " " .. p.Name; btn.TextColor3 = Color3.new(1, 1, 1); btn.Font = Enum.Font.SourceSans; btn.TextSize = 9
+                btn.MouseButton1Click:Connect(function() TPTo(p) end)
+                btn.MouseButton2Click:Connect(function() ShowRoleMenu(p, UserInputService:GetMouseLocation()) end)
             end
         end
-    end
-    
-    -- Duy trì trạng thái an toàn
-    if flags.godmode and humanoid then
-        pcall(function()
-            if humanoid.Health < 1e8 then
-                humanoid.Health = 1e9
-            end
-        end)
-    end
-    
-    if flags.invisible then
-        pcall(function() setInvisible(true) end)
-    end
-    
-    if flags.noclip then
-        pcall(function() setNoclip(true) end)
-    end
-    
-    if flags.speed then
-        pcall(function() setSpeed(36) end)
-    else
-        pcall(function() setSpeed(16) end)
-    end
-    
-    if flags.fixLag then
-        pcall(function() setFixLag(true) end)
-    end
-end)
-
--- GUI fix lỗi
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "VIP_MM2"
-screenGui.Parent = player.PlayerGui
-screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true
-
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 220, 0, 380)
-frame.Position = UDim2.new(0, 5, 0, 5)
-frame.BackgroundColor3 = Color3.new(0.05, 0.05, 0.05)
-frame.BackgroundTransparency = 0.15
-frame.BorderSizePixel = 0
-frame.Active = true
-frame.Draggable = true
-frame.Parent = screenGui
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1,0,0,28)
-title.BackgroundTransparency = 1
-title.Text = "VIP PRO " .. executorName
-title.TextColor3 = Color3.new(1,0.6,0)
-title.TextScaled = true
-title.Font = Enum.Font.GothamBold
-title.Parent = frame
-
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(0,26,0,26)
-toggleBtn.Position = UDim2.new(1,-32,0,2)
-toggleBtn.Text = "-"
-toggleBtn.TextColor3 = Color3.new(1,1,1)
-toggleBtn.BackgroundColor3 = Color3.new(0.2,0.2,0.2)
-toggleBtn.BorderSizePixel = 0
-toggleBtn.Parent = frame
-
-local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1,-6,1,-34)
-scroll.Position = UDim2.new(0,3,0,30)
-scroll.BackgroundTransparency = 1
-scroll.CanvasSize = UDim2.new(0,0,0,600)
-scroll.ScrollBarThickness = 5
-scroll.Parent = frame
-
-local function addToggle(text, key)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1,-4,0,24)
-    btn.Position = UDim2.new(0,2,0,#scroll:GetChildren()*27)
-    btn.Text = text .. (flags[key] and " [ON]" or " [OFF]")
-    btn.TextColor3 = Color3.new(0.9,0.9,0.9)
-    btn.TextScaled = true
-    btn.BackgroundColor3 = Color3.new(0.15,0.15,0.15)
-    btn.BorderSizePixel = 0
-    btn.Parent = scroll
-    btn.MouseButton1Click:Connect(function()
-        flags[key] = not flags[key]
-        btn.Text = text .. (flags[key] and " [ON]" or " [OFF]")
-        pcall(function()
-            if key == "invisible" then setInvisible(flags[key])
-            elseif key == "noclip" then setNoclip(flags[key])
-            elseif key == "godmode" then setGodmode(flags[key])
-            elseif key == "speed" then setSpeed(flags[key] and 36 or 16)
-            elseif key == "fixLag" then setFixLag(flags[key])
-            elseif key == "esp" then 
-                if flags[key] then updateESP() 
-                else 
-                    for _,g in pairs(espCache) do 
-                        if g then pcall(function() g.Enabled = false end) end 
-                    end 
-                end
-            end
-        end)
+        ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, count * 24)
     end)
-    return btn
 end
 
-local function addButton(text, cb)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1,-4,0,24)
-    btn.Position = UDim2.new(0,2,0,#scroll:GetChildren()*27)
-    btn.Text = text
-    btn.TextColor3 = Color3.new(0.8,0.8,1)
-    btn.TextScaled = true
-    btn.BackgroundColor3 = Color3.new(0.1,0.15,0.2)
-    btn.BorderSizePixel = 0
-    btn.Parent = scroll
-    btn.MouseButton1Click:Connect(function()
-        pcall(cb)
-    end)
-    return btn
-end
+local RefreshBtn = Instance.new("TextButton", Content)
+RefreshBtn.Size = UDim2.new(1, -10, 0, 18); RefreshBtn.Position = UDim2.new(0, 5, 1, -20); RefreshBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+RefreshBtn.Text = "REFRESH"; RefreshBtn.TextColor3 = Color3.new(1, 1, 1); RefreshBtn.Font = Enum.Font.SourceSansBold; RefreshBtn.TextSize = 7
+RefreshBtn.MouseButton1Click:Connect(RefreshList)
 
--- Thêm các chức năng
-addToggle("ESP (màu vai)", "esp")
-addButton("TP → Kẻ giết", function() 
-    local m = getRoles() 
-    if m and m[1] and m[1][1] then teleportTo(m[1][1]) end 
-end)
-addButton("TP → Cảnh sát", function() 
-    local _,p = getRoles() 
-    if p and p[1] and p[1][1] then teleportTo(p[1][1]) end 
-end)
-addButton("TP → Vô tội", function() 
-    local _,_,i = getRoles() 
-    if i and i[1] and i[1][1] then teleportTo(i[1][1]) end 
-end)
-addButton("TP All Vô tội → tôi", teleportAllInnocentToMe)
-addButton("TP Kẻ giết → tôi", teleportMurdererToMe)
-addToggle("Tàng hình (;inlivable)", "invisible")
-addToggle("Xuyên tường", "noclip")
-addToggle("Bất tử", "godmode")
-addToggle("Speed x2.5", "speed")
-addToggle("Fix Lag MAX", "fixLag")
-addButton("Refresh ESP", updateESP)
-addButton("Reset Speed", function() setSpeed(16) flags.speed = false end)
+-- Mini menu
+local MiniSG = Instance.new("ScreenGui", CoreGui); MiniSG.Name = "MM2_Mini"
+local MiniFrame = Instance.new("Frame", MiniSG)
+MiniFrame.Size = UDim2.new(0, 200, 0, 30); MiniFrame.Position = UDim2.new(0, 10, 0, 30)
+MiniFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 18); MiniFrame.BorderColor3 = Color3.fromRGB(255, 150, 0)
+MiniFrame.BorderSizePixel = 2; MiniFrame.Active = true; MiniFrame.Draggable = true; MiniFrame.Visible = false
+local MiniBar = Instance.new("Frame", MiniFrame)
+MiniBar.Size = UDim2.new(1, 0, 1, 0); MiniBar.BackgroundColor3 = Color3.fromRGB(180, 20, 20)
+local MiniTitle = Instance.new("TextLabel", MiniBar)
+MiniTitle.Text = "MM2 [THU GON]"; MiniTitle.Size = UDim2.new(1, -55, 1, 0); MiniTitle.Position = UDim2.new(0, 5, 0, 0)
+MiniTitle.BackgroundTransparency = 1; MiniTitle.TextColor3 = Color3.new(1, 1, 1); MiniTitle.Font = Enum.Font.SourceSansBold; MiniTitle.TextSize = 9
+local ExpandBtn = Instance.new("TextButton", MiniBar)
+ExpandBtn.Size = UDim2.new(0, 22, 0, 22); ExpandBtn.Position = UDim2.new(1, -50, 0, 4); ExpandBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+ExpandBtn.Text = "+"; ExpandBtn.TextColor3 = Color3.new(1, 1, 1); ExpandBtn.Font = Enum.Font.SourceSansBold; ExpandBtn.TextSize = 14
+local MiniClose = Instance.new("TextButton", MiniBar)
+MiniClose.Size = UDim2.new(0, 22, 0, 22); MiniClose.Position = UDim2.new(1, -26, 0, 4); MiniClose.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+MiniClose.Text = "✕"; MiniClose.TextColor3 = Color3.new(1, 1, 1); MiniClose.Font = Enum.Font.SourceSansBold; MiniClose.TextSize = 12
+MiniClose.MouseButton1Click:Connect(function() MainSG:Destroy(); MiniSG:Destroy() end)
+MinBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false; MiniFrame.Position = MainFrame.Position; MiniFrame.Visible = true end)
+ExpandBtn.MouseButton1Click:Connect(function() MiniFrame.Visible = false; MainFrame.Position = MiniFrame.Position; MainFrame.Visible = true; RefreshList() end)
 
--- Thu gọn
-local collapsed = false
-toggleBtn.MouseButton1Click:Connect(function()
-    collapsed = not collapsed
-    frame.Size = collapsed and UDim2.new(0,220,0,32) or UDim2.new(0,220,0,380)
-    scroll.Visible = not collapsed
-    title.Visible = not collapsed
-    toggleBtn.Text = collapsed and "+" or "-"
+-- =====================================================================
+-- START
+-- =====================================================================
+RunService.RenderStepped:Connect(UpdateESP)
+RefreshList()
+Players.PlayerAdded:Connect(function() wait(0.5); RefreshList() end)
+Players.PlayerRemoving:Connect(function(p)
+    if highlights[p.Name] then pcall(function() highlights[p.Name]:Destroy() end); highlights[p.Name] = nil end
+    if MurdererName == p.Name then MurdererName = nil end
+    UserRoles[p.Name] = nil; wait(0.3); RefreshList()
 end)
-
--- Anti-kick an toàn
-pcall(function()
-    if player.Kick then
-        player.Kick = function(...) return end
-    end
-    if teleportService.Teleport then
-        teleportService.Teleport = function(...) return end
-    end
-    if teleportService.TeleportToPlaceInstance then
-        teleportService.TeleportToPlaceInstance = function(...) return end
-    end
-end)
-
--- Bảo vệ GUI cho Xeno
-pcall(function()
-    if syn and syn.protect_gui then
-        syn.protect_gui(screenGui)
-    end
-end)
-
--- Dọn cache ESP
-runService.RenderStepped:Connect(function()
-    for v, g in pairs(espCache) do
-        if not v or not v.Parent then
-            pcall(function() g:Destroy() end)
-            espCache[v] = nil
-        end
-    end
-end)
-
--- Fix lỗi mất character
-player.CharacterAdded:Connect(function()
-    character = nil
-    humanoid = nil
-    setNoclip(false)
-    noclipCache = {}
-    wait(0.5)
-    if flags.invisible then pcall(function() setInvisible(true) end) end
-    if flags.noclip then pcall(function() setNoclip(true) end) end
-    if flags.godmode then pcall(function() setGodmode(true) end) end
-    if flags.speed then pcall(function() setSpeed(36) end) end
-end)
-
-print("✅ VIP PRO MM2 - FIX 100% LỖI - Đã tải thành công trên " .. executorName)
+spawn(function() while MainSG and MainSG.Parent do wait(5); pcall(function() FindMurderer() end); pcall(RefreshList) end end)
+StarterGui:SetCore("SendNotification", {Title = "MM2 KILLER FINDER", Text = "Dang tim Ke Giet... | Click = TP | Chuot phai = Role", Duration = 5})
